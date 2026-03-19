@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, ForbiddenException, BadRequestException 
 import { v4 as uuid } from 'uuid';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { JobStatus, Role } from '@prisma/client';
+import { JobStatus, QuoteStatus, Role } from '@prisma/client';
 
 // Valid state transitions
 const STATE_TRANSITIONS: Record<JobStatus, JobStatus[]> = {
@@ -52,12 +52,9 @@ export class JobsService {
                 user: {
                   create: {
                     email: data.ownerEmail.toLowerCase(),
-                    passwordHash: '', // Will be set via invite
+                    clerkId: `invite-${uuid()}`,
                     role: Role.OWNER,
-                    emailVerified: false,
                   },
-                  firstName: '',
-                  lastName: '',
                 },
               },
             },
@@ -109,10 +106,12 @@ export class JobsService {
       throw new BadRequestException('Job is not awaiting owner submission');
     }
 
-    await this.prisma.property.update({
-      where: { id: job.propertyId },
-      data: { latitude: data.latitude, longitude: data.longitude },
-    });
+    if (job.propertyId) {
+      await this.prisma.property.update({
+        where: { id: job.propertyId },
+        data: { latitude: data.latitude, longitude: data.longitude },
+      });
+    }
 
     // Photos are uploaded separately via Files module, just mark as submitted
     await this.transitionStatus(jobId, JobStatus.SUBMITTED, ownerId);
@@ -145,10 +144,14 @@ export class JobsService {
 
   // ─── ADMIN: Assign scaffolder ─────────────────────────
   async assignScaffolder(jobId: string, adminId: string, scaffolderId: string) {
+    // scaffolderId here is a User.id with Scaffolder role — look up the Scaffolder record
+    const scaffolder = await this.prisma.scaffolder.findUnique({ where: { userId: scaffolderId } });
+    if (!scaffolder) throw new NotFoundException('Scaffolder profile not found');
+
     await this.transitionStatus(jobId, JobStatus.ASSIGNED_TO_SCAFFOLDER, adminId);
 
     await this.prisma.jobAssignment.create({
-      data: { jobId, scaffolderId, assignedBy: adminId },
+      data: { jobId, scaffolderId: scaffolder.id, assignedBy: adminId },
     });
 
     await this.notifications.send(scaffolderId, 'SCAFFOLDER_ASSIGNED', { jobId });
@@ -163,14 +166,18 @@ export class JobsService {
       throw new BadRequestException('Job is not ready for quotes');
     }
 
+    // scaffolderId is User.id — look up Scaffolder record
+    const scaffolder = await this.prisma.scaffolder.findUnique({ where: { userId: scaffolderId } });
+    if (!scaffolder) throw new NotFoundException('Scaffolder profile not found');
+
     const quote = await this.prisma.quote.create({
       data: {
         jobId,
-        scaffolderId,
+        scaffolderId: scaffolder.id,
         amount: data.amount,
         notes: data.notes,
         proposedDate: data.proposedDate,
-        status: 'SUBMITTED',
+        status: QuoteStatus.SUBMITTED,
       },
     });
 
@@ -236,10 +243,10 @@ export class JobsService {
       if (!owner) return { data: [], total: 0, page, limit };
       where.propertyId = { in: (await this.prisma.property.findMany({ where: { ownerId: owner.id }, select: { id: true } })).map(p => p.id) };
     } else if (role === Role.SCAFFOLDER) {
-      const assignment = await this.prisma.jobAssignment.findFirst({ where: { scaffolderId: userId, isActive: true } });
-      if (!assignment) return { data: [], total: 0, page, limit };
+      const scaffolder = await this.prisma.scaffolder.findUnique({ where: { userId } });
+      if (!scaffolder) return { data: [], total: 0, page, limit };
       // Scaffolders see jobs assigned to them
-      where.assignments = { some: { scaffolderId: userId, isActive: true } };
+      where.assignments = { some: { scaffolderId: scaffolder.id, isActive: true } };
     }
     // ADMIN sees all
 

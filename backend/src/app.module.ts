@@ -12,6 +12,9 @@ import { AuditModule } from './audit/audit.module';
 import { StorageModule } from './storage/storage.module';
 import { GdprModule } from './gdpr/gdpr.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { FilesModule } from './files/files.module';
+import { RegionsModule } from './regions/regions.module';
+import { ScaffoldersModule } from './scaffolders/scaffolders.module';
 
 @Module({
   imports: [
@@ -28,6 +31,9 @@ import { PrismaModule } from './prisma/prisma.module';
     AuditModule,
     StorageModule,
     GdprModule,
+    FilesModule,
+    RegionsModule,
+    ScaffoldersModule,
   ],
 })
 export class AppModule {}

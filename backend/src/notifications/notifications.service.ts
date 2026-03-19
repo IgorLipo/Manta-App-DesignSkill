@@ -17,30 +17,15 @@ export class NotificationsService {
   ) {}
 
   async send(userId: string, type: string, payload: NotificationPayload = {}) {
-    // Get template
-    const template = await this.prisma.notificationTemplate.findUnique({ where: { type } });
+    const title = this.defaultTitle(type);
+    const body = this.defaultBody(type, payload);
 
-    // Build title and body from template or defaults
-    const title = template?.titleTemplate || this.defaultTitle(type);
-    const body = template?.bodyTemplate || this.defaultBody(type, payload);
-
-    // Save in-app notification
     const notification = await this.prisma.notification.create({
-      data: {
-        userId,
-        type,
-        title,
-        body,
-        jobId: payload.jobId,
-        data: payload as any,
-      },
+      data: { userId, type, title, message: body, metadata: payload },
     });
 
-    // Send push notification (FCM stub)
     await this.sendPushNotification(userId, title, body);
-
-    // Send email (stub)
-    await this.sendEmailNotification(userId, title, body, template?.emailSubject, template?.emailBody);
+    await this.sendEmailNotification(userId, title, body);
 
     return notification;
   }
@@ -48,35 +33,24 @@ export class NotificationsService {
   async getInAppNotifications(userId: string, page = 1, limit = 20) {
     const skip = (page - 1) * limit;
     const [data, total] = await Promise.all([
-      this.prisma.notification.findMany({
-        where: { userId },
-        orderBy: { sentAt: 'desc' },
-        skip,
-        take: limit,
-      }),
+      this.prisma.notification.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, skip, take: limit }),
       this.prisma.notification.count({ where: { userId } }),
     ]);
     return { data, total, page, limit };
   }
 
   async markAsRead(notificationId: string, userId: string) {
-    await this.prisma.notification.updateMany({
-      where: { id: notificationId, userId },
-      data: { isRead: true },
-    });
+    await this.prisma.notification.updateMany({ where: { id: notificationId, userId }, data: { read: true } });
     return { success: true };
   }
 
   async markAllAsRead(userId: string) {
-    await this.prisma.notification.updateMany({
-      where: { userId, isRead: false },
-      data: { isRead: true },
-    });
+    await this.prisma.notification.updateMany({ where: { userId, read: false }, data: { read: true } });
     return { success: true };
   }
 
   async getUnreadCount(userId: string) {
-    return this.prisma.notification.count({ where: { userId, isRead: false } });
+    return this.prisma.notification.count({ where: { userId, read: false } });
   }
 
   private async sendPushNotification(userId: string, title: string, body: string) {
@@ -84,7 +58,7 @@ export class NotificationsService {
     console.log(`[PUSH] To ${userId}: ${title} - ${body}`);
   }
 
-  private async sendEmailNotification(userId: string, title: string, body: string, subject?: string, emailBody?: string) {
+  private async sendEmailNotification(userId: string, title: string, body: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) return;
     // Email stub - integrate with SendGrid / SES / Resend

@@ -8,20 +8,22 @@ datasource db {
 }
 
 model User {
-  id          String   @id @default(uuid())
-  clerkId     String   @unique
-  email       String   @unique
-  name        String?
-  role        Role     @default(OWNER)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  jobs        Job[]    @relation("JobOwner")
-  assignedJobs Job[]   @relation("JobScaffolder")
-  quotes      Quote[]
-  photos      Photo[]
-  auditLogs   AuditLog[]
+  id            String    @id @default(uuid())
+  clerkId       String    @unique
+  email         String    @unique
+  name          String?
+  role          Role      @default(OWNER)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  jobs          Job[]     @relation("JobOwner")
+  photos        Photo[]
+  auditLogs     AuditLog[]
   notifications Notification[]
-  consents    Consent[]
+  consents      Consent[]
+  owner         Owner?
+  scaffolder    Scaffolder?
+  engineer      Engineer?
 }
 
 enum Role {
@@ -31,60 +33,164 @@ enum Role {
   Engineer
 }
 
+model Owner {
+  id        String    @id @default(uuid())
+  userId    String    @unique
+  user      User      @relation(fields: [userId], references: [id])
+  properties Property[] @relation("PropertyOwner")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Scaffolder {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id])
+  regionId    String?
+  region      Region?  @relation(fields: [regionId], references: [id])
+  jobs        JobAssignment[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Engineer {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  reports   SiteReport[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Region {
+  id          String       @id @default(uuid())
+  name        String
+  postcode    String
+  scaffolders Scaffolder[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Property {
+  id           String    @id @default(uuid())
+  addressLine1 String
+  addressLine2 String?
+  city         String
+  postcode     String
+  latitude     Float?
+  longitude    Float?
+  ownerId      String
+  owner        Owner     @relation("PropertyOwner", fields: [ownerId], references: [id])
+  jobs         Job[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
 model Job {
-  id            String    @id @default(uuid())
-  title         String
-  description   String?
-  address       String
-  latitude      Float?
-  longitude     Float?
-  status        JobStatus @default(DRAFT)
-  ownerId       String
-  owner         User      @relation("JobOwner", fields: [ownerId], references: [id])
-  scaffolderId  String?
-  scaffolder    User?     @relation("JobScaffolder", fields: [scaffolderId], references: [id])
-  quotes        Quote[]
-  photos        Photo[]
-  auditLogs     AuditLog[]
-  scheduledDate DateTime?
-  scheduledDuration Int?
-  completionDate DateTime?
-  completionNotes String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                 String            @id @default(uuid())
+  title              String
+  description        String?
+  address            String
+  latitude           Float?
+  longitude          Float?
+  status             JobStatus         @default(DRAFT)
+  ownerId            String
+  owner              User              @relation("JobOwner", fields: [ownerId], references: [id])
+  propertyId         String?
+  property           Property?         @relation(fields: [propertyId], references: [id])
+  inviteToken        String?
+  inviteSentAt       DateTime?
+  inviteExpiresAt    DateTime?
+  scheduledDate      DateTime?
+  scheduledDuration  Int?
+  completionDate     DateTime?
+  completionNotes    String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  assignments        JobAssignment[]
+  photos             Photo[]
+  quotes             Quote[]
+  schedules          Schedule[]
+  siteReports        SiteReport[]
+  statusHistory      JobStatusHistory[]
+  auditLogs          AuditLog[]
 }
 
 enum JobStatus {
-  Draft
-  Submitted
-  PhotoReview
-  QuoteSubmitted
-  Negotiating
-  Scheduled
-  InProgress
-  Completed
-  Cancelled
+  DRAFT
+  AWAITING_OWNER_SUBMISSION
+  SUBMITTED
+  NEEDS_MORE_INFO
+  VALIDATED
+  ASSIGNED_TO_SCAFFOLDER
+  QUOTE_PENDING
+  QUOTE_SUBMITTED
+  QUOTE_REVISION_REQUESTED
+  QUOTE_APPROVED
+  QUOTE_REJECTED
+  SCHEDULING_IN_PROGRESS
+  SCHEDULED
+  SCAFFOLD_WORK_IN_PROGRESS
+  SCAFFOLD_COMPLETE
+  INSTALLER_ASSIGNED
+  SITE_REPORT_PENDING
+  SITE_REPORT_IN_PROGRESS
+  SITE_REPORT_SUBMITTED
+  COMPLETED
+  CANCELLED
+  ON_HOLD
+}
+
+model JobAssignment {
+  id          String   @id @default(uuid())
+  jobId       String
+  job         Job     @relation(fields: [jobId], references: [id])
+  scaffolderId String
+  scaffolder  Scaffolder @relation(fields: [scaffolderId], references: [id])
+  assignedBy  String
+  isActive    Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([jobId, scaffolderId])
+}
+
+model JobStatusHistory {
+  id         String    @id @default(uuid())
+  jobId      String
+  job        Job       @relation(fields: [jobId], references: [id])
+  fromStatus JobStatus?
+  toStatus   JobStatus
+  changedBy  String
+  note       String?
+  createdAt  DateTime  @default(now())
 }
 
 model Quote {
-  id          String      @id @default(uuid())
-  jobId       String
-  job         Job         @relation(fields: [jobId], references: [id])
-  scaffolderId String
-  scaffolder  User        @relation(fields: [scaffolderId], references: [id])
-  amount      Float
-  notes       String?
-  status      QuoteStatus @default(PENDING)
-  submittedAt DateTime    @default(now())
-  respondedAt DateTime?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id            String      @id @default(uuid())
+  jobId         String
+  job           Job         @relation(fields: [jobId], references: [id])
+  scaffolderId  String
+  scaffolder    Scaffolder @relation(fields: [scaffolderId], references: [id])
+  amount        Float
+  notes         String?
+  status        QuoteStatus @default(PENDING)
+  proposedDate  DateTime?
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  revisionNote  String?
+  version       Int        @default(1)
+  submittedAt   DateTime    @default(now())
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 }
 
 enum QuoteStatus {
-  Pending
-  Accepted
-  Rejected
+  PENDING
+  SUBMITTED
+  APPROVED
+  REJECTED
+  REVISION_REQUESTED
 }
 
 model Photo {
@@ -96,24 +202,49 @@ model Photo {
   url         String
   storageKey  String
   caption     String?
+  reviewStatus ReviewStatus @default(PENDING)
   approved    Boolean      @default(false)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 }
 
-model AuditLog {
-  id          String   @id @default(uuid())
-  jobId       String?
-  job         Job?     @relation(fields: [jobId], references: [id])
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  action      String
-  entityType  String
-  entityId    String
-  previousValue String?
-  newValue    String?
-  metadata    Json?
-  timestamp   DateTime @default(now())
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Schedule {
+  id           String   @id @default(uuid())
+  jobId        String
+  job          Job     @relation(fields: [jobId], references: [id])
+  proposedDate DateTime
+  duration     Int      // minutes
+  status      ScheduleStatus @default(PROPOSED)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum ScheduleStatus {
+  PROPOSED
+  CONFIRMED
+  RESCHEDULED
+  CANCELLED
+}
+
+model SiteReport {
+  id            String   @id @default(uuid())
+  jobId         String
+  job           Job     @relation(fields: [jobId], references: [id])
+  engineerId    String
+  engineer      User    @relation(fields: [engineerId], references: [id])
+  summary       String?
+  findings      String?
+  pdfUrl        String?
+  storageKey    String?
+  submittedAt   DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model Notification {
@@ -129,13 +260,28 @@ model Notification {
 }
 
 model Consent {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
   type      String
   granted   Boolean
-  grantedAt DateTime @default(now())
+  grantedAt DateTime  @default(now())
   revokedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model AuditLog {
+  id            String   @id @default(uuid())
+  jobId         String?
+  job           Job?     @relation(fields: [jobId], references: [id])
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  action        String
+  entityType    String
+  entityId      String
+  previousValue String?
+  newValue      String?
+  metadata      Json?
+  timestamp     DateTime @default(now())
 }

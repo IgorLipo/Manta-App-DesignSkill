@@ -93,7 +93,7 @@ export class QuotesService {
     await this.notifyAdmins('QUOTE_SUBMITTED', jobId, {
       quoteId: quote.id,
       amount: data.amount,
-      scaffolderName: `${assignment.scaffolder.firstName} ${assignment.scaffolder.lastName}`,
+      scaffolderName: assignment.scaffolder.user.name ?? 'Unknown',
     });
 
     return quote;
