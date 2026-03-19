@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength, IsEnum, IsOptional } from 'class-validator';
+import { IsEmail, IsString, MinLength, IsEnum, IsOptional, MaxLength } from 'class-validator';
 import { Role } from '@prisma/client';
 
 export class RegisterDto {
@@ -15,11 +15,23 @@ export class RegisterDto {
 
   @IsString()
   @IsOptional()
+  @MaxLength(50)
   firstName?: string;
 
   @IsString()
   @IsOptional()
+  @MaxLength(50)
   lastName?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(20)
+  phone?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(200)
+  companyName?: string;
 }
 
 export class LoginDto {
@@ -50,6 +62,42 @@ export class ResetPasswordDto {
 }
 
 export class VerifyEmailDto {
+  @IsString()
+  token: string;
+}
+
+export class UpdateProfileDto {
+  @IsString()
+  @IsOptional()
+  @MaxLength(50)
+  firstName?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(50)
+  lastName?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(20)
+  phone?: string;
+}
+
+export class ChangePasswordDto {
+  @IsString()
+  currentPassword: string;
+
+  @IsString()
+  @MinLength(8)
+  newPassword: string;
+}
+
+export class MagicLinkDto {
+  @IsEmail()
+  email: string;
+}
+
+export class MagicLinkVerifyDto {
   @IsString()
   token: string;
 }

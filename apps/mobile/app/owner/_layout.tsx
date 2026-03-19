@@ -1,11 +1,20 @@
-import { Tabs } from 'expo-router';
+import { Stack } from 'expo-router';
+import { View, Text, Pressable } from 'react-native';
 
 export default function OwnerLayout() {
   return (
-    <Tabs screenOptions={{ headerShown: false, tabBarActiveTintColor: '#2563eb', tabBarInactiveTintColor: '#94a3b8', tabBarStyle: { borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingTop: 8, paddingBottom: 8, height: 60 } }}>
-      <Tabs.Screen name="index" options={{ title: 'My Jobs', tabBarIcon: () => null }} />
-      <Tabs.Screen name="submit" options={{ title: 'Submit Photos', tabBarIcon: () => null }} />
-      <Tabs.Screen name="notifications" options={{ title: 'Notifications', tabBarIcon: () => null }} />
-    </Tabs>
+    <Stack
+      screenOptions={{
+        headerStyle: { backgroundColor: '#059669' },
+        headerTintColor: '#fff',
+        headerTitleStyle: { fontWeight: '600' },
+      }}
+    >
+      <Stack.Screen name="index" options={{ title: 'My Properties' }} />
+      <Stack.Screen name="job-detail" options={{ title: 'Job Details' }} />
+      <Stack.Screen name="submit" options={{ title: 'Submit Photos' }} />
+      <Stack.Screen name="schedule" options={{ title: 'Schedule' }} />
+      <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
+    </Stack>
   );
 }
