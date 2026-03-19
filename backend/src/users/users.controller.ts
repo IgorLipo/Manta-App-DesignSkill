@@ -1,27 +1,24 @@
-import { Controller, Get, Patch, Body, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { Role } from '../common/enums/role.enum';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 export class UsersController {
-  constructor(private users: UsersService) {}
+  constructor(private usersService: UsersService) {}
 
-  @Get('me')
-  me(@Req() req: Request & { user: { userId: string } }) {
-    return this.users.findById(req.user.userId);
+  @Get()
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  findAll() {
+    return this.usersService.findAll();
   }
 
-  @Patch('me')
-  updateProfile(
-    @Req() req: Request & { user: { userId: string } },
-    @Body() body: { firstName?: string; lastName?: string; phone?: string },
-  ) {
-    return this.users.updateProfile(req.user.userId, body);
-  }
-
-  @Get('scaffolders')
-  getScaffolders(@Body() filters: { regionId?: string; isActive?: boolean }) {
-    return this.users.getScaffolders(filters);
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.usersService.findById(id);
   }
 }
