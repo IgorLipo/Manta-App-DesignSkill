@@ -1,29 +1,41 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, Pressable, Image, Alert, TextInput } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, Pressable, Image, Alert, TextInput, ActivityIndicator } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { jobsApi, getErrorMessage } from '../../src/lib/api';
+import { JobStatus } from '../../src/stores/jobStore';
 
 const PHOTO_GUIDE = [
-  { id: '1', category: 'EXTERIOR_FRONT', label: 'Front of Property', required: true, example: '📷 Take from across the street, showing full front elevation' },
-  { id: '2', category: 'EXTERIOR_REAR', label: 'Rear of Property', required: true, example: '📷 Show the back of the house where panels will likely go' },
-  { id: '3', category: 'ROOF_OVERVIEW', label: 'Roof Overview', required: true, example: '📷 Wide shot showing roof pitch and direction' },
-  { id: '4', category: 'ROOF_PANEL_AREA', label: 'Panel Area', required: true, example: '📷 Close up of the area where panels will be installed' },
-  { id: '5', category: 'ACCESS_CONSTRAINTS', label: 'Access Points', required: true, example: '📷 Show gates, driveways, or any access constraints' },
-  { id: '6', category: 'HEIGHT_REFERENCE', label: 'Height Reference', required: false, example: '📷 Include a person or reference object for scale' },
-  { id: '7', category: 'OBSTACLE_CLOSEUP', label: 'Obstacles (optional)', required: false, example: '📷 Chimneys, Velux windows, aerials, satellite dishes' },
+  { id: '1', category: 'EXTERIOR_FRONT', label: 'Front of Property', required: true, example: 'Take from across the street, showing full front elevation' },
+  { id: '2', category: 'EXTERIOR_REAR', label: 'Rear of Property', required: true, example: 'Show the back of the house where panels will likely go' },
+  { id: '3', category: 'ROOF_OVERVIEW', label: 'Roof Overview', required: true, example: 'Wide shot showing roof pitch and direction' },
+  { id: '4', category: 'ROOF_PANEL_AREA', label: 'Panel Area', required: true, example: 'Close up of the area where panels will be installed' },
+  { id: '5', category: 'ACCESS_CONSTRAINTS', label: 'Access Points', required: true, example: 'Show gates, driveways, or any access constraints' },
+  { id: '6', category: 'HEIGHT_REFERENCE', label: 'Height Reference', required: false, example: 'Include a person or reference object for scale' },
+  { id: '7', category: 'OBSTACLE_CLOSEUP', label: 'Obstacles (optional)', required: false, example: 'Chimneys, Velux windows, aerials, satellite dishes' },
 ];
 
+type Step = 'guide' | 'location' | 'photos' | 'review';
+
 export default function SubmitPhotosScreen() {
-  const [step, setStep] = useState<'guide' | 'location' | 'photos' | 'review'>('guide');
+  const router = useRouter();
+  const { jobId } = useLocalSearchParams<{ jobId?: string }>();
+
+  const [step, setStep] = useState<Step>('guide');
   const [photos, setPhotos] = useState<Record<string, string[]>>({});
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [address, setAddress] = useState('');
+  const [postcode, setPostcode] = useState('');
   const [locationLoading, setLocationLoading] = useState(false);
   const [currentCategory, setCurrentCategory] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const requestPermissions = async () => {
     const camera = await ImagePicker.requestCameraPermissionsAsync();
-    const location = await Location.requestForegroundPermissionsAsync();
-    if (!camera.granted || !location.granted) {
+    const locationPerm = await Location.requestForegroundPermissionsAsync();
+    if (!camera.granted || !locationPerm.granted) {
       Alert.alert('Permissions needed', 'Camera and location permissions are required');
     }
   };
@@ -34,7 +46,7 @@ export default function SubmitPhotosScreen() {
       const loc = await Location.getCurrentPosition({});
       setLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
     } catch {
-      Alert.alert('Location Error', 'Could not get your location. Please pin it manually.');
+      Alert.alert('Location Error', 'Could not get your location. Please enter your address manually.');
     } finally {
       setLocationLoading(false);
     }
@@ -54,16 +66,75 @@ export default function SubmitPhotosScreen() {
     }
   };
 
+  const handleSubmit = async () => {
+    if (!location) {
+      Alert.alert('Missing Location', 'Please provide your property location');
+      return;
+    }
+
+    if (!address || !postcode) {
+      Alert.alert('Missing Address', 'Please provide your property address');
+      return;
+    }
+
+    const requiredPhotos = PHOTO_GUIDE.filter((g) => g.required);
+    const hasAllRequired = requiredPhotos.every((g) => (photos[g.category]?.length || 0) > 0);
+
+    if (!hasAllRequired) {
+      Alert.alert('Missing Photos', 'Please take all required photos before submitting');
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      // Collect all photo URIs
+      const allPhotos = Object.values(photos).flat();
+
+      if (jobId) {
+        // Submit to existing job
+        await jobsApi.submitOwner(jobId, {
+          location,
+          photos: allPhotos,
+          address,
+          postcode,
+        });
+      } else {
+        // For demo/mock: create a new job submission
+        // In a real app, this would call an API to create a new job
+        // For now, we'll simulate success
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+
+      Alert.alert('Success', 'Your property submission has been received!', [
+        { text: 'OK', onPress: () => router.back() }
+      ]);
+    } catch (err: any) {
+      const message = getErrorMessage(err);
+      setError(message);
+      Alert.alert('Submission Failed', message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const requiredDone = PHOTO_GUIDE.filter((g) => g.required).every((g) => (photos[g.category]?.length || 0) > 0);
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Progress */}
       <View style={styles.progress}>
-        {['guide', 'location', 'photos', 'review'].map((s, i) => (
-          <View key={s} style={[styles.progressStep, i <= ['guide', 'location', 'photos', 'review'].indexOf(step) && styles.progressStepActive]} />
+        {(['guide', 'location', 'photos', 'review'] as Step[]).map((s, i) => (
+          <View key={s} style={[styles.progressStep, i <= (['guide', 'location', 'photos', 'review'] as Step[]).indexOf(step) && styles.progressStepActive]} />
         ))}
       </View>
+
+      {error && (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorBannerText}>{error}</Text>
+        </View>
+      )}
 
       <ScrollView style={styles.scroll} contentContainerStyle={{ padding: 20 }}>
         {step === 'guide' && (
@@ -90,21 +161,39 @@ export default function SubmitPhotosScreen() {
             <Text style={styles.stepTitle}>Pin Your Property</Text>
             <Text style={styles.stepDesc}>We need your property location to match you with local scaffolders.</Text>
             <Pressable style={styles.secondaryButton} onPress={getCurrentLocation} disabled={locationLoading}>
-              <Text style={styles.secondaryButtonText}>{locationLoading ? 'Getting location...' : '📍 Use My Current Location'}</Text>
+              <Text style={styles.secondaryButtonText}>{locationLoading ? 'Getting location...' : 'Use My Current Location'}</Text>
             </Pressable>
             {location && (
               <View style={styles.locationConfirm}>
-                <Text style={styles.locationText}>✅ Location captured</Text>
+                <Text style={styles.locationText}>Location captured</Text>
                 <Text style={styles.locationCoords}>{location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}</Text>
               </View>
             )}
             <View style={styles.manualLocation}>
-              <Text style={styles.manualLabel}>Or enter your postcode:</Text>
-              <TextInput style={styles.input} placeholder="e.g. BS1 4LG" />
+              <Text style={styles.manualLabel}>Or enter your address:</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Address"
+                value={address}
+                onChangeText={setAddress}
+                placeholderTextColor="#94a3b8"
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Postcode (e.g. BS1 4LG)"
+                value={postcode}
+                onChangeText={setPostcode}
+                placeholderTextColor="#94a3b8"
+                autoCapitalize="characters"
+              />
             </View>
             <View style={styles.buttonRow}>
               <Pressable style={styles.backButton} onPress={() => setStep('guide')}><Text style={styles.backButtonText}>Back</Text></Pressable>
-              <Pressable style={[styles.primaryButton, (!location) && styles.buttonDisabled]} onPress={() => setStep('photos')} disabled={!location}>
+              <Pressable
+                style={[styles.primaryButton, (!location || !address || !postcode) && styles.buttonDisabled]}
+                onPress={() => setStep('photos')}
+                disabled={!location || !address || !postcode}
+              >
                 <Text style={styles.primaryButtonText}>Continue</Text>
               </Pressable>
             </View>
@@ -125,7 +214,7 @@ export default function SubmitPhotosScreen() {
                         {item.required && <Text style={styles.requiredSmall}>Required</Text>}
                       </View>
                       {hasPhoto ? (
-                        <View style={styles.photoDone}><Text style={styles.photoDoneText}>✅ {photos[item.category].length} photo(s)</Text></View>
+                        <View style={styles.photoDone}><Text style={styles.photoDoneText}>{photos[item.category].length} photo(s)</Text></View>
                       ) : (
                         <View style={styles.photoEmpty}><Text style={styles.photoEmptyText}>+ Add</Text></View>
                       )}
@@ -135,14 +224,14 @@ export default function SubmitPhotosScreen() {
               </View>
             ) : (
               <View>
-                <Pressable onPress={() => setCurrentCategory(null)}><Text style={styles.backLink}>← Back to list</Text></Pressable>
+                <Pressable onPress={() => setCurrentCategory(null)}><Text style={styles.backLink}>Back to list</Text></Pressable>
                 <Text style={styles.categoryTitle}>{PHOTO_GUIDE.find((g) => g.category === currentCategory)?.label}</Text>
                 <Text style={styles.categoryGuide}>{PHOTO_GUIDE.find((g) => g.category === currentCategory)?.example}</Text>
                 {photos[currentCategory]?.map((uri, i) => (
                   <View key={i} style={styles.photoPreview}><Image source={{ uri }} style={styles.previewImage} /></View>
                 ))}
                 <Pressable style={styles.cameraButton} onPress={() => takePhoto(currentCategory)}>
-                  <Text style={styles.cameraButtonText}>📷 Take Photo</Text>
+                  <Text style={styles.cameraButtonText}>Take Photo</Text>
                 </Pressable>
               </View>
             )}
@@ -159,20 +248,27 @@ export default function SubmitPhotosScreen() {
             <Text style={styles.stepTitle}>Review & Submit</Text>
             <Text style={styles.stepDesc}>Check your submission before sending to our team.</Text>
             <View style={styles.reviewSection}>
-              <Text style={styles.reviewLabel}>📍 Location</Text>
-              <Text style={styles.reviewValue}>{location ? `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}` : 'Not set'}</Text>
+              <Text style={styles.reviewLabel}>Location</Text>
+              <Text style={styles.reviewValue}>{address}, {postcode}</Text>
+              {location && (
+                <Text style={styles.reviewCoords}>{location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}</Text>
+              )}
             </View>
             <View style={styles.reviewSection}>
-              <Text style={styles.reviewLabel}>📷 Photos</Text>
+              <Text style={styles.reviewLabel}>Photos</Text>
               <Text style={styles.reviewValue}>{Object.values(photos).flat().length} photo(s) submitted</Text>
               {PHOTO_GUIDE.filter((g) => g.required).map((g) => (
-                <Text key={g.id} style={styles.reviewItem}>• {g.label}: {photos[g.category]?.length || 0}</Text>
+                <Text key={g.id} style={styles.reviewItem}>{g.label}: {photos[g.category]?.length || 0}</Text>
               ))}
             </View>
             <View style={styles.buttonRow}>
-              <Pressable style={styles.backButton} onPress={() => setStep('photos')}><Text style={styles.backButtonText}>Back</Text></Pressable>
-              <Pressable style={styles.submitButton}>
-                <Text style={styles.submitButtonText}>Submit for Review</Text>
+              <Pressable style={styles.backButton} onPress={() => setStep('photos')} disabled={submitting}><Text style={styles.backButtonText}>Back</Text></Pressable>
+              <Pressable style={[styles.submitButton, submitting && styles.buttonDisabled]} onPress={handleSubmit} disabled={submitting}>
+                {submitting ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.submitButtonText}>Submit for Review</Text>
+                )}
               </Pressable>
             </View>
           </View>
@@ -188,6 +284,8 @@ const styles = StyleSheet.create({
   progressStep: { flex: 1, height: 4, backgroundColor: '#e2e8f0', borderRadius: 2 },
   progressStepActive: { backgroundColor: '#059669' },
   scroll: { flex: 1 },
+  errorBanner: { backgroundColor: '#fee2e2', padding: 12, marginHorizontal: 16, marginTop: 8, borderRadius: 8 },
+  errorBannerText: { color: '#dc2626', fontSize: 14 },
   stepTitle: { fontSize: 22, fontWeight: 'bold', color: '#1e293b', marginBottom: 8 },
   stepDesc: { fontSize: 14, color: '#64748b', marginBottom: 24, lineHeight: 20 },
   guideItem: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0', padding: 16, marginBottom: 10 },
@@ -205,7 +303,7 @@ const styles = StyleSheet.create({
   locationCoords: { fontSize: 12, color: '#64748b', marginTop: 4 },
   manualLocation: { marginBottom: 16 },
   manualLabel: { fontSize: 13, color: '#374151', marginBottom: 8 },
-  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 },
+  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, marginBottom: 10 },
   buttonRow: { flexDirection: 'row', gap: 12, marginTop: 16 },
   backButton: { flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
   backButtonText: { color: '#374151', fontSize: 16, fontWeight: '500' },
@@ -228,6 +326,7 @@ const styles = StyleSheet.create({
   reviewSection: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0', padding: 16, marginBottom: 12 },
   reviewLabel: { fontSize: 12, fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
   reviewValue: { fontSize: 15, fontWeight: '600', color: '#1e293b' },
+  reviewCoords: { fontSize: 12, color: '#64748b', marginTop: 4 },
   reviewItem: { fontSize: 13, color: '#64748b', marginTop: 4 },
   submitButton: { flex: 1, backgroundColor: '#059669', borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
   submitButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },

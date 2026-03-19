@@ -6,7 +6,6 @@ import { PhotoCategory } from '@prisma/client';
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const COMPRESSION_QUALITY = 0.8;
 
 @Injectable()
 export class FilesService {
@@ -28,26 +27,26 @@ export class FilesService {
 
     const key = this.s3.generateKey(`jobs/${jobId}/photos`, file.originalname);
 
-    // In production: compress image here using Sharp
     await this.s3.upload(key, file.buffer, file.mimetype, {
       'original-name': file.originalname,
       'uploaded-by': uploaderId,
       'job-id': jobId,
     });
 
-    const photo = await this.prisma.jobPhoto.create({
+    const photo = await this.prisma.photo.create({
       data: {
         jobId,
-        uploaderId,
+        uploadedById: uploaderId,
         category,
         fileName: file.originalname,
         storageKey: key,
-        thumbnailKey: key, // In production: generate separate thumbnail
+        thumbnailKey: key,
         mimeType: file.mimetype,
         fileSize: file.size,
         latitude: metadata?.latitude,
         longitude: metadata?.longitude,
         reviewStatus: 'PENDING',
+        url: key,
       },
     });
 
@@ -55,32 +54,32 @@ export class FilesService {
   }
 
   async approvePhoto(photoId: string, adminId: string) {
-    return this.prisma.jobPhoto.update({
+    return this.prisma.photo.update({
       where: { id: photoId },
       data: { reviewStatus: 'APPROVED', reviewedBy: adminId, reviewedAt: new Date() },
     });
   }
 
   async rejectPhoto(photoId: string, adminId: string, note: string) {
-    return this.prisma.jobPhoto.update({
+    return this.prisma.photo.update({
       where: { id: photoId },
       data: { reviewStatus: 'REJECTED', reviewedBy: adminId, reviewedAt: new Date(), reviewNote: note },
     });
   }
 
   async getJobPhotos(jobId: string) {
-    return this.prisma.jobPhoto.findMany({
+    return this.prisma.photo.findMany({
       where: { jobId },
       orderBy: { createdAt: 'asc' },
     });
   }
 
   async deletePhoto(photoId: string, userId: string) {
-    const photo = await this.prisma.jobPhoto.findUnique({ where: { id: photoId } });
+    const photo = await this.prisma.photo.findUnique({ where: { id: photoId } });
     if (!photo) return;
-    if (photo.uploaderId !== userId) throw new BadRequestException('Cannot delete photo you did not upload');
+    if (photo.uploadedById !== userId) throw new BadRequestException('Cannot delete photo you did not upload');
     await this.s3.delete(photo.storageKey);
-    await this.prisma.jobPhoto.delete({ where: { id: photoId } });
+    await this.prisma.photo.delete({ where: { id: photoId } });
     return { success: true };
   }
 }

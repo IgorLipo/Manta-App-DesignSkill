@@ -35,6 +35,9 @@
     "extra": {
       "eas": {
         "projectId": "solar-ops-project-id"
+      },
+      "router": {
+        "origin": false
       }
     }
   }

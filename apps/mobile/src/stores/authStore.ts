@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
-import { authApi } from '../lib/api';
+import { router } from 'expo-router';
+import { authApi, getErrorMessage } from '../lib/api';
 
 export interface User {
   id: string;
@@ -19,6 +20,8 @@ interface AuthState {
   register: (data: { name: string; email: string; password: string; role: 'OWNER' | 'SCAFFOLDER' | 'ENGINEER' }) => Promise<void>;
   setUser: (user: User | null) => void;
   checkAuth: () => Promise<void>;
+  getToken: () => Promise<string | null>;
+  clearAuth: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -46,10 +49,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
+    const { accessToken } = get();
     try {
-      await authApi.logout();
+      if (accessToken) {
+        await authApi.logout();
+      }
     } catch {
-      // Ignore logout errors
+      // Ignore logout errors - user should be logged out regardless
     }
     await SecureStore.deleteItemAsync('accessToken');
     await SecureStore.deleteItemAsync('refreshToken');
@@ -58,6 +64,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       accessToken: null,
       isAuthenticated: false,
     });
+    router.replace('/auth/login');
   },
 
   register: async (data) => {
@@ -106,5 +113,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isLoading: false,
       });
     }
+  },
+
+  getToken: async () => {
+    try {
+      return await SecureStore.getItemAsync('accessToken');
+    } catch {
+      return null;
+    }
+  },
+
+  clearAuth: async () => {
+    await SecureStore.deleteItemAsync('accessToken');
+    await SecureStore.deleteItemAsync('refreshToken');
+    set({
+      user: null,
+      accessToken: null,
+      isAuthenticated: false,
+    });
   },
 }));

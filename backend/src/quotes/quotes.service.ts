@@ -28,7 +28,7 @@ export class QuotesService {
       include: {
         assignments: {
           where: { scaffolderId, isActive: true },
-          include: { scaffolder: true },
+          include: { scaffolder: { include: { user: true } } },
         },
       },
     });
@@ -44,8 +44,8 @@ export class QuotesService {
     }
 
     // Check job status - can submit quote when assigned or in QUOTE_PENDING state
-    const allowedStatuses = [JobStatus.ASSIGNED_TO_SCAFFOLDER, JobStatus.QUOTE_PENDING];
-    if (!allowedStatuses.includes(job.status)) {
+    const allowedStatuses: JobStatus[] = [JobStatus.ASSIGNED_TO_SCAFFOLDER, JobStatus.QUOTE_PENDING];
+    if (!allowedStatuses.includes(job.status as JobStatus)) {
       throw new BadRequestException('Job is not ready for quotes');
     }
 

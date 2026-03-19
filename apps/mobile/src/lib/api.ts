@@ -1,7 +1,8 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import { router } from 'expo-router';
 
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api/v1';
+const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
 
 export const api = axios.create({
   baseURL: API_BASE,
@@ -24,12 +25,13 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+// Response interceptor for error handling
 api.interceptors.response.use(
   (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
+  async (error: AxiosError) => {
+    const originalRequest = error.config as (typeof api.defaults) & { _retry?: boolean };
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
       originalRequest._retry = true;
 
       try {
@@ -45,11 +47,23 @@ api.interceptors.response.use(
       } catch (refreshError) {
         await SecureStore.deleteItemAsync('accessToken');
         await SecureStore.deleteItemAsync('refreshToken');
+        // Redirect to login on auth failure
+        router.replace('/auth/login');
       }
     }
+
+    // Reject with error for caller to handle
     return Promise.reject(error);
   }
 );
+
+// Helper to extract error message
+export function getErrorMessage(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    return error.response?.data?.message || error.message || 'Network error';
+  }
+  return 'An unexpected error occurred';
+}
 
 // Auth API
 export const authApi = {
@@ -69,34 +83,44 @@ export const authApi = {
   refreshToken: (refreshToken: string) => api.post('/auth/refresh', { refreshToken }),
 };
 
-// Jobs API
+// Jobs API - role-aware queries
 export const jobsApi = {
-  list: (params?: { status?: string; role?: string }) => api.get('/jobs', { params }),
+  // Get jobs filtered by current user role (uses JWT to determine user)
+  list: (params?: { status?: string; page?: number; limit?: number }) =>
+    api.get('/jobs', { params }),
+  // Get single job by ID
   get: (id: string) => api.get(`/jobs/${id}`),
-  getByRole: (role: string) => api.get('/jobs', { params: { role } }),
+  // Owner submits property details and photos
   submitOwner: (id: string, data: {
     location: { latitude: number; longitude: number };
     photos: string[];
     address: string;
     postcode: string;
   }) => api.post(`/jobs/${id}/submit`, data),
+  // Scaffolder submits quote
   submitQuote: (id: string, data: {
     amount: number;
     startDate: string;
     endDate: string;
     notes: string;
   }) => api.post(`/jobs/${id}/quote`, data),
+  // Owner confirms schedule
   confirmSchedule: (id: string) => api.post(`/jobs/${id}/schedule/confirm`),
+  // Owner requests schedule change
   requestScheduleChange: (id: string, reason: string) => api.post(`/jobs/${id}/schedule/change`, { reason }),
+  // Scaffolder marks unavailable
   markUnavailable: (id: string, reason: string) => api.post(`/jobs/${id}/schedule/unavailable`, { reason }),
+  // Scaffolder responds to schedule
   respondToSchedule: (id: string, response: 'confirm' | 'reschedule' | 'unavailable', data?: { reason?: string; proposedDate?: string }) =>
     api.post(`/jobs/${id}/schedule/respond`, { response, ...data }),
+  // Scaffolder marks scaffold complete
   markScaffoldComplete: (id: string, data?: { photos?: string[]; notes?: string }) =>
     api.post(`/jobs/${id}/scaffold-complete`, data),
+  // Get job schedule details
   getSchedule: (id: string) => api.get(`/jobs/${id}/schedule`),
 };
 
-// Files API
+// Files/Photos API
 export const filesApi = {
   uploadPhoto: (jobId: string, category: string, formData: FormData) =>
     api.post(`/files/photos/${jobId}/${category}`, formData, {

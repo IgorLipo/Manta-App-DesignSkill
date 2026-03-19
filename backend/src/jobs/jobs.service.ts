@@ -41,6 +41,9 @@ export class JobsService {
   async createJob(adminId: string, data: { propertyId: string; addressLine1: string; addressLine2?: string; city: string; postcode: string; ownerEmail: string }) {
     const job = await this.prisma.job.create({
       data: {
+        title: data.addressLine1,
+        address: data.addressLine1,
+        ownerId: adminId, // placeholder - will be updated
         property: {
           create: {
             addressLine1: data.addressLine1,
@@ -63,7 +66,7 @@ export class JobsService {
         status: JobStatus.DRAFT,
         inviteToken: uuid(),
         inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      },
+      } as any,
       include: { property: { include: { owner: true } } },
     });
 
@@ -91,7 +94,7 @@ export class JobsService {
     });
 
     await this.transitionStatus(jobId, JobStatus.AWAITING_OWNER_SUBMISSION, adminId);
-    await this.notifications.send(job.property.owner.userId, 'OWNER_INVITE', {
+    await this.notifications.send(job.property!.owner.userId, 'OWNER_INVITE', {
       jobId,
       token,
     });
@@ -133,7 +136,7 @@ export class JobsService {
     } else if (decision === 'request_more_info') {
       await this.transitionStatus(jobId, JobStatus.NEEDS_MORE_INFO, adminId, note);
       const job = await this.prisma.job.findUnique({ where: { id: jobId } });
-      const owner = await this.prisma.owner.findFirst({ where: { properties: { some: { id: job!.propertyId } } } });
+      const owner = await this.prisma.owner.findFirst({ where: { properties: { some: { id: job!.propertyId ?? '' } } } });
       if (owner) await this.notifications.send(owner.userId, 'MORE_INFO_REQUESTED', { jobId, note });
       return { status: JobStatus.NEEDS_MORE_INFO };
     } else {
@@ -288,7 +291,7 @@ export class JobsService {
     // ACL check
     if (role === Role.OWNER) {
       const owner = await this.prisma.owner.findUnique({ where: { userId } });
-      if (job.property.ownerId !== owner?.id) throw new ForbiddenException();
+      if (job.property!.ownerId !== owner?.id) throw new ForbiddenException();
     } else if (role === Role.SCAFFOLDER) {
       const assigned = job.assignments.some(a => a.scaffolder.userId === userId);
       if (!assigned) throw new ForbiddenException();

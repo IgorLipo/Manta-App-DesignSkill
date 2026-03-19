@@ -1,21 +1,33 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { api } from '@/lib/api';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Mock login - in production would call authApi
-    setTimeout(() => {
-      window.location.href = '/';
+    setError('');
+    try {
+      const { data } = await api.post('/auth/login', { email, password });
+      localStorage.setItem('accessToken', data.accessToken);
+      localStorage.setItem('refreshToken', data.refreshToken || '');
+      localStorage.setItem('user', JSON.stringify(data.user));
+      router.push('/');
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Login failed. Check your credentials.');
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -64,6 +76,12 @@ export default function LoginPage() {
           <h2 className="text-2xl font-bold text-text mb-2">Welcome back</h2>
           <p className="text-text-muted mb-8">Sign in to your admin account</p>
 
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              {error}
+            </div>
+          )}
+
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-text mb-2">Email address</label>
@@ -80,7 +98,9 @@ export default function LoginPage() {
               <label className="block text-sm font-medium text-text mb-2">Password</label>
               <Input
                 type="password"
-                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="admin123"
                 className="h-11"
                 required
               />
@@ -90,9 +110,6 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-6 text-center">
-            <a href="#" className="text-sm text-primary hover:underline">Sign in with magic link</a>
-          </div>
           <div className="mt-2 text-center">
             <a href="#" className="text-sm text-text-muted hover:text-primary">Forgot password?</a>
           </div>

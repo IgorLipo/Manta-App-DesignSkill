@@ -1,20 +1,20 @@
 import { IsEmail, IsString, MinLength, IsEnum, IsOptional, IsNumber, IsDateString, IsArray, IsBoolean, IsUUID, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
-import { Role, JobStatus, PhotoCategory, PhotoReviewStatus, QuoteStatus, ScheduleStatus, ReportStatus } from '@prisma/client';
+import { Role, JobStatus, PhotoCategory, ReviewStatus as PhotoReviewStatus, QuoteStatus, ScheduleStatus } from '@prisma/client';
 
 // ==================== AUTH DTOs ====================
 
 export class RegisterDto {
   @IsEmail()
-  email: string;
+  email!: string;
 
   @IsString()
   @MinLength(8)
-  password: string;
+  password!: string;
 
   @IsEnum(Role)
   @IsOptional()
-  role?: Role = Role.OWNER;
+  role?: Role;
 
   @IsString()
   @IsOptional()
@@ -39,34 +39,34 @@ export class RegisterDto {
 
 export class LoginDto {
   @IsEmail()
-  email: string;
+  email!: string;
 
   @IsString()
-  password: string;
+  password!: string;
 }
 
 export class RefreshTokenDto {
   @IsString()
-  refreshToken: string;
+  refreshToken!: string;
 }
 
 export class ForgotPasswordDto {
   @IsEmail()
-  email: string;
+  email!: string;
 }
 
 export class ResetPasswordDto {
   @IsString()
-  token: string;
+  token!: string;
 
   @IsString()
   @MinLength(8)
-  newPassword: string;
+  newPassword!: string;
 }
 
 export class VerifyEmailDto {
   @IsString()
-  token: string;
+  token!: string;
 }
 
 export class UpdateProfileDto {
@@ -88,21 +88,21 @@ export class UpdateProfileDto {
 
 export class MagicLinkDto {
   @IsEmail()
-  email: string;
+  email!: string;
 }
 
 // ==================== USER DTOs ====================
 
 export class CreateUserDto {
   @IsEmail()
-  email: string;
+  email!: string;
 
   @IsString()
   @MinLength(8)
-  password: string;
+  password!: string;
 
   @IsEnum(Role)
-  role: Role;
+  role!: Role;
 
   @IsString()
   @IsOptional()
@@ -172,7 +172,7 @@ export class UserQueryDto {
 export class CreateJobDto {
   @IsString()
   @MaxLength(255)
-  addressLine1: string;
+  addressLine1!: string;
 
   @IsString()
   @IsOptional()
@@ -181,14 +181,14 @@ export class CreateJobDto {
 
   @IsString()
   @MaxLength(100)
-  city: string;
+  city!: string;
 
   @IsString()
   @MaxLength(20)
-  postcode: string;
+  postcode!: string;
 
   @IsEmail()
-  ownerEmail: string;
+  ownerEmail!: string;
 
   @IsString()
   @IsOptional()
@@ -250,7 +250,7 @@ export class UpdateJobDto {
 
 export class TransitionStatusDto {
   @IsEnum(JobStatus)
-  status: JobStatus;
+  status!: JobStatus;
 
   @IsString()
   @IsOptional()
@@ -288,31 +288,31 @@ export class JobQueryDto {
 
 export class InviteOwnerDto {
   @IsEmail()
-  email: string;
+  email!: string;
 }
 
 export class AssignScaffolderDto {
   @IsUUID()
-  scaffolderId: string;
+  scaffolderId!: string;
 }
 
 export class SubmitPhotosDto {
   @IsNumber()
   @Type(() => Number)
-  latitude: number;
+  latitude!: number;
 
   @IsNumber()
   @Type(() => Number)
-  longitude: number;
+  longitude!: number;
 
   @IsArray()
   @IsString({ each: true })
-  photoKeys: string[];
+  photoKeys!: string[];
 }
 
 export class ValidateJobDto {
   @IsEnum(['approve', 'request_more_info', 'reject'])
-  decision: 'approve' | 'request_more_info' | 'reject';
+  decision!: 'approve' | 'request_more_info' | 'reject';
 
   @IsString()
   @IsOptional()
@@ -323,7 +323,7 @@ export class ValidateJobDto {
 export class SubmitQuoteDto {
   @IsNumber()
   @Type(() => Number)
-  amount: number;
+  amount!: number;
 
   @IsString()
   @IsOptional()
@@ -337,7 +337,7 @@ export class SubmitQuoteDto {
 
 export class ReviewQuoteDto {
   @IsEnum(['approve', 'reject', 'revision'])
-  decision: 'approve' | 'reject' | 'revision';
+  decision!: 'approve' | 'reject' | 'revision';
 
   @IsString()
   @IsOptional()
@@ -349,17 +349,17 @@ export class ReviewQuoteDto {
 
 export class UploadPhotoDto {
   @IsEnum(PhotoCategory)
-  category: PhotoCategory;
+  category!: PhotoCategory;
 
   @IsString()
-  fileName: string;
+  fileName!: string;
 
   @IsString()
-  mimeType: string;
+  mimeType!: string;
 
   @IsNumber()
   @Type(() => Number)
-  fileSize: number;
+  fileSize!: number;
 
   @IsNumber()
   @IsOptional()
@@ -374,7 +374,7 @@ export class UploadPhotoDto {
 
 export class ReviewPhotoDto {
   @IsEnum(PhotoReviewStatus)
-  reviewStatus: PhotoReviewStatus;
+  reviewStatus!: PhotoReviewStatus;
 
   @IsString()
   @IsOptional()
@@ -386,7 +386,7 @@ export class ReviewPhotoDto {
 
 export class ProposeScheduleDto {
   @IsDateString()
-  proposedDate: string;
+  proposedDate!: string;
 
   @IsString()
   @IsOptional()
@@ -396,7 +396,7 @@ export class ProposeScheduleDto {
 
 export class RespondScheduleDto {
   @IsEnum(['confirm', 'request_change', 'unavailable'])
-  response: 'confirm' | 'request_change' | 'unavailable';
+  response!: 'confirm' | 'request_change' | 'unavailable';
 
   @IsString()
   @IsOptional()
@@ -408,7 +408,7 @@ export class RespondScheduleDto {
 
 export class CreateReportDto {
   @IsObject()
-  data: Record<string, any>;
+  data!: Record<string, any>;
 }
 
 export class SubmitReportDto {
@@ -418,9 +418,9 @@ export class SubmitReportDto {
 }
 
 export class ReportQueryDto {
-  @IsEnum(ReportStatus)
+  @IsString()
   @IsOptional()
-  status?: ReportStatus;
+  status?: string;
 
   @IsNumber()
   @IsOptional()
@@ -464,11 +464,11 @@ export class QuoteQueryDto {
 export class CreateRegionDto {
   @IsString()
   @MaxLength(100)
-  name: string;
+  name!: string;
 
   @IsString()
   @MaxLength(10)
-  code: string;
+  code!: string;
 
   @IsString()
   @IsOptional()
@@ -501,19 +501,19 @@ export class UpdateRegionDto {
 
 export class CreateScaffolderDto {
   @IsEmail()
-  email: string;
+  email!: string;
 
   @IsString()
   @MinLength(8)
-  password: string;
+  password!: string;
 
   @IsString()
   @MaxLength(100)
-  firstName: string;
+  firstName!: string;
 
   @IsString()
   @MaxLength(100)
-  lastName: string;
+  lastName!: string;
 
   @IsString()
   @IsOptional()
@@ -607,15 +607,15 @@ export class NotificationQueryDto {
 export class CreateNotificationTemplateDto {
   @IsString()
   @MaxLength(100)
-  type: string;
+  type!: string;
 
   @IsString()
   @MaxLength(200)
-  titleTemplate: string;
+  titleTemplate!: string;
 
   @IsString()
   @MaxLength(1000)
-  bodyTemplate: string;
+  bodyTemplate!: string;
 
   @IsString()
   @IsOptional()

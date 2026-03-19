@@ -9,6 +9,41 @@ import { Role } from '../common/enums/role.enum';
 export class AuthController {
   constructor(private authService: AuthService) {}
 
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  async login(@Body() body: { email: string; password: string }) {
+    return this.authService.login(body.email, body.password);
+  }
+
+  @Post('register')
+  @HttpCode(HttpStatus.CREATED)
+  async register(@Body() body: { email: string; password: string; firstName: string; lastName: string; role?: string }) {
+    return this.authService.register(body);
+  }
+
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  async refresh(@Body() body: { refreshToken: string }) {
+    return this.authService.refresh(body.refreshToken);
+  }
+
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  async logout(@Body() body: { refreshToken: string }, @Req() req: any) {
+    // Extract userId from the authenticated request if available
+    const userId = req.user?.userId;
+    if (userId) {
+      return this.authService.logout(userId);
+    }
+    return { success: true };
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  async me(@Req() req: any) {
+    return req.user;
+  }
+
   @Post('clerk/webhook')
   async clerkWebhook(@Body() body: any) {
     // Handle Clerk webhook - user creation/updates
@@ -21,12 +56,6 @@ export class AuthController {
     const user = await this.authService.validateToken(body.token);
     if (!user) throw new Error('Invalid token');
     return { user, token: body.token };
-  }
-
-  @Get('me')
-  @UseGuards(JwtAuthGuard)
-  async me(@Req() req: any) {
-    return req.user;
   }
 
   @Post('admin/assign-role')

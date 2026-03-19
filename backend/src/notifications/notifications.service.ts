@@ -1,13 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
-
-interface NotificationPayload {
-  jobId?: string;
-  token?: string;
-  note?: string;
-  quoteId?: string;
-}
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class NotificationsService {
@@ -16,12 +10,12 @@ export class NotificationsService {
     private config: ConfigService,
   ) {}
 
-  async send(userId: string, type: string, payload: NotificationPayload = {}) {
+  async send(userId: string, type: string, payload: Record<string, any> = {}) {
     const title = this.defaultTitle(type);
     const body = this.defaultBody(type, payload);
 
     const notification = await this.prisma.notification.create({
-      data: { userId, type, title, message: body, metadata: payload },
+      data: { userId, type, title, message: body, metadata: payload as Prisma.InputJsonValue },
     });
 
     await this.sendPushNotification(userId, title, body);
@@ -49,6 +43,11 @@ export class NotificationsService {
     return { success: true };
   }
 
+  async deleteNotification(notificationId: string, userId: string) {
+    await this.prisma.notification.deleteMany({ where: { id: notificationId, userId } });
+    return { success: true };
+  }
+
   async getUnreadCount(userId: string) {
     return this.prisma.notification.count({ where: { userId, read: false } });
   }
@@ -62,7 +61,7 @@ export class NotificationsService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) return;
     // Email stub - integrate with SendGrid / SES / Resend
-    console.log(`[EMAIL] To ${user.email}: ${subject || title}`);
+    console.log(`[EMAIL] To ${user.email}: ${title}`);
   }
 
   private defaultTitle(type: string): string {
@@ -70,7 +69,7 @@ export class NotificationsService {
       OWNER_INVITE: 'Action Required: Submit Your Property Photos',
       JOB_SUBMITTED: 'New Job Submitted for Review',
       MORE_INFO_REQUESTED: 'More Information Requested',
-      ScaffOLDER_ASSIGNED: 'New Job Assigned to You',
+      SCAFFOLDER_ASSIGNED: 'New Job Assigned to You',
       QUOTE_SUBMITTED: 'New Quote Submitted',
       QUOTE_APPROVED: 'Quote Approved',
       QUOTE_REJECTED: 'Quote Rejected',
@@ -89,7 +88,7 @@ export class NotificationsService {
       OWNER_INVITE: 'Please submit your property photos to continue with your solar installation.',
       JOB_SUBMITTED: 'A property owner has submitted their information. Please review.',
       MORE_INFO_REQUESTED: 'The admin has requested more information. Please check your job details.',
-      ScaffOLDER_ASSIGNED: 'You have been assigned a new scaffold job. Please review the details.',
+      SCAFFOLDER_ASSIGNED: 'You have been assigned a new scaffold job. Please review the details.',
       QUOTE_SUBMITTED: 'A scaffolder has submitted a quote for your review.',
       QUOTE_APPROVED: 'Your quote has been approved. Scheduling will begin shortly.',
       QUOTE_REJECTED: 'Your quote has been rejected. Please contact support.',

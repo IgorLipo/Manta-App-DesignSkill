@@ -1,40 +1,113 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Eye, List, LayoutGrid, Search, Filter, ChevronRight } from 'lucide-react';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger
+} from '@/components/ui/dialog';
+import { Eye, List, LayoutGrid, Search, Filter, ChevronRight, Plus } from 'lucide-react';
 import Link from 'next/link';
+import { jobsApi } from '@/lib/api';
+import { toast } from '@/components/ui/toaster';
 
-const jobs = [
-  { id: 'JOB-001', address: '14 Oak Avenue, Bristol BS1 2AB', owner: 'Sarah Jones', status: 'Submitted', region: 'South West', scaffolder: 'Acme Scaffolding', updated: '2h ago' },
-  { id: 'JOB-002', address: '7 Pine Road, Exeter EX4 5BT', owner: 'Michael Brown', status: 'Needs Info', region: 'South West', scaffolder: 'Southwest Scaff', updated: '5h ago' },
-  { id: 'JOB-003', address: '22 Elm Street, Cardiff CF10 1AB', owner: 'Emily Wilson', status: 'Scheduled', region: 'Wales', scaffolder: 'Welsh Scaffolding', updated: '1d ago' },
-  { id: 'JOB-004', address: '89 Maple Drive, Manchester M1 5AB', owner: 'David Taylor', status: 'Validated', region: 'North West', scaffolder: 'Northern Scaff', updated: '1d ago' },
-  { id: 'JOB-005', address: '3 Cedar Lane, Birmingham B1 2DE', owner: 'Lisa Anderson', status: 'Quote Pending', region: 'Midlands', scaffolder: 'Midland Scaff Co', updated: '2d ago' },
-  { id: 'JOB-006', address: '45 Birch Road, Leeds LS2 7PN', owner: 'James Martin', status: 'Awaiting Submission', region: 'Yorkshire', scaffolder: 'Yorkshire Scaff', updated: '2d ago' },
-  { id: 'JOB-007', address: '12 Willow Way, Glasgow G1 5PY', owner: 'Rachel White', status: 'Quote Submitted', region: 'Scotland', scaffolder: 'Scottish Scaff', updated: '3d ago' },
-  { id: 'JOB-008', address: '67 Ash Street, Liverpool L1 8JQ', owner: 'Robert Clark', status: 'Submitted', region: 'North West', scaffolder: 'Liverpool Scaff', updated: '3d ago' },
-];
+interface Job {
+  id: string;
+  address: string;
+  ownerName: string;
+  status: string;
+  region: string;
+  scaffolderName?: string;
+  updatedAt: string;
+}
 
 const statusVariant: Record<string, 'default' | 'warning' | 'info' | 'success' | 'secondary'> = {
-  'Submitted': 'secondary', 'Needs Info': 'warning', 'Scheduled': 'default',
-  'Validated': 'success', 'Quote Pending': 'info', 'Awaiting Submission': 'warning',
-  'Quote Submitted': 'info',
+  'SUBMITTED': 'secondary',
+  'NEEDS_INFO': 'warning',
+  'SCHEDULED': 'default',
+  'VALIDATED': 'success',
+  'QUOTE_PENDING': 'info',
+  'AWAITING_SUBMISSION': 'warning',
+  'QUOTE_SUBMITTED': 'info',
+  'COMPLETED': 'success',
+};
+
+interface JobFormData {
+  address: string;
+  ownerName: string;
+  ownerEmail: string;
+  ownerPhone: string;
+  regionId: string;
+}
+
+const initialFormData: JobFormData = {
+  address: '',
+  ownerName: '',
+  ownerEmail: '',
+  ownerPhone: '',
+  regionId: '',
 };
 
 export default function JobsPage() {
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'list' | 'kanban'>('list');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [formData, setFormData] = useState<JobFormData>(initialFormData);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const fetchJobs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params: { status?: string; search?: string } = {};
+      if (statusFilter !== 'all') params.status = statusFilter;
+      if (search) params.search = search;
+
+      const response = await jobsApi.list(params) as { data: Job[] };
+      setJobs(response.data || []);
+    } catch (error) {
+      console.error('Failed to fetch jobs:', error);
+      toast({ title: 'Error', description: 'Failed to load jobs', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter, search]);
+
+  useEffect(() => {
+    fetchJobs();
+  }, [fetchJobs]);
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    try {
+      await jobsApi.create({
+        address: formData.address,
+        ownerName: formData.ownerName,
+        ownerEmail: formData.ownerEmail,
+        ownerPhone: formData.ownerPhone,
+        regionId: formData.regionId,
+      });
+      toast({ title: 'Success', description: 'Job created successfully' });
+      setIsDialogOpen(false);
+      setFormData(initialFormData);
+      fetchJobs();
+    } catch (error) {
+      console.error('Failed to create job:', error);
+      toast({ title: 'Error', description: 'Failed to create job', variant: 'destructive' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const filteredJobs = jobs.filter(j =>
     (statusFilter === 'all' || j.status === statusFilter) &&
-    (j.address.toLowerCase().includes(search.toLowerCase()) || j.owner.toLowerCase().includes(search.toLowerCase()))
+    (j.address?.toLowerCase().includes(search.toLowerCase()) || j.ownerName?.toLowerCase().includes(search.toLowerCase()))
   );
 
   return (
@@ -44,7 +117,67 @@ export default function JobsPage() {
           <h1 className="text-2xl font-bold text-text">Jobs</h1>
           <p className="text-text-muted">Manage and track all solar installation jobs</p>
         </div>
-        <Button><Filter className="w-4 h-4 mr-2" /> Filter</Button>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button><Plus className="w-4 h-4 mr-2" /> New Job</Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Create New Job</DialogTitle>
+              <DialogDescription>
+                Create a new solar installation job.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <label htmlFor="address" className="text-sm font-medium">Property Address</label>
+                <Input
+                  id="address"
+                  placeholder="14 Oak Avenue, Bristol BS1 2AB"
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <label htmlFor="ownerName" className="text-sm font-medium">Owner Name</label>
+                <Input
+                  id="ownerName"
+                  placeholder="Sarah Jones"
+                  value={formData.ownerName}
+                  onChange={(e) => setFormData({ ...formData, ownerName: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <label htmlFor="ownerEmail" className="text-sm font-medium">Owner Email</label>
+                <Input
+                  id="ownerEmail"
+                  type="email"
+                  placeholder="sarah.jones@email.com"
+                  value={formData.ownerEmail}
+                  onChange={(e) => setFormData({ ...formData, ownerEmail: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <label htmlFor="ownerPhone" className="text-sm font-medium">Owner Phone</label>
+                <Input
+                  id="ownerPhone"
+                  placeholder="07700 900123"
+                  value={formData.ownerPhone}
+                  onChange={(e) => setFormData({ ...formData, ownerPhone: e.target.value })}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+              <Button
+                onClick={handleSubmit}
+                disabled={!formData.address || !formData.ownerName || !formData.ownerEmail || isSubmitting}
+              >
+                {isSubmitting ? 'Creating...' : 'Create Job'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <Card>
@@ -65,11 +198,11 @@ export default function JobsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All statuses</SelectItem>
-                <SelectItem value="Submitted">Submitted</SelectItem>
-                <SelectItem value="Needs Info">Needs Info</SelectItem>
-                <SelectItem value="Validated">Validated</SelectItem>
-                <SelectItem value="Quote Pending">Quote Pending</SelectItem>
-                <SelectItem value="Scheduled">Scheduled</SelectItem>
+                <SelectItem value="SUBMITTED">Submitted</SelectItem>
+                <SelectItem value="NEEDS_INFO">Needs Info</SelectItem>
+                <SelectItem value="VALIDATED">Validated</SelectItem>
+                <SelectItem value="QUOTE_PENDING">Quote Pending</SelectItem>
+                <SelectItem value="SCHEDULED">Scheduled</SelectItem>
               </SelectContent>
             </Select>
             <div className="flex gap-1 border border-border rounded-md p-1">
@@ -84,7 +217,11 @@ export default function JobsPage() {
         </CardContent>
       </Card>
 
-      {view === 'list' ? (
+      {loading ? (
+        <Card>
+          <CardContent className="p-8 text-center text-text-muted">Loading jobs...</CardContent>
+        </Card>
+      ) : view === 'list' ? (
         <Card>
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -105,11 +242,11 @@ export default function JobsPage() {
                   <tr key={job.id} className="border-b border-border hover:bg-slate-50/50">
                     <td className="px-5 py-4 text-sm font-medium text-primary">{job.id}</td>
                     <td className="px-5 py-4 text-sm text-text">{job.address}</td>
-                    <td className="px-5 py-4 text-sm text-text-muted">{job.owner}</td>
-                    <td className="px-5 py-4"><Badge variant={statusVariant[job.status]}>{job.status}</Badge></td>
+                    <td className="px-5 py-4 text-sm text-text-muted">{job.ownerName}</td>
+                    <td className="px-5 py-4"><Badge variant={statusVariant[job.status] || 'secondary'}>{job.status.replace('_', ' ')}</Badge></td>
                     <td className="px-5 py-4 text-sm text-text-muted">{job.region}</td>
-                    <td className="px-5 py-4 text-sm text-text-muted">{job.scaffolder}</td>
-                    <td className="px-5 py-4 text-sm text-text-muted">{job.updated}</td>
+                    <td className="px-5 py-4 text-sm text-text-muted">{job.scaffolderName || 'Unassigned'}</td>
+                    <td className="px-5 py-4 text-sm text-text-muted">{job.updatedAt}</td>
                     <td className="px-5 py-4 text-right">
                       <Link href={`/jobs/${job.id}`}><Button variant="ghost" size="sm"><Eye className="w-4 h-4 mr-1" /> View</Button></Link>
                     </td>
@@ -128,10 +265,10 @@ export default function JobsPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {['Submitted', 'Needs Info', 'Validated', 'Quote Pending', 'Scheduled', 'Completed'].map((status) => (
+          {['SUBMITTED', 'NEEDS_INFO', 'VALIDATED', 'QUOTE_PENDING', 'SCHEDULED', 'COMPLETED'].map((status) => (
             <Card key={status}>
               <div className="px-4 py-3 border-b border-border bg-slate-50">
-                <p className="font-medium text-sm">{status}</p>
+                <p className="font-medium text-sm">{status.replace('_', ' ')}</p>
                 <p className="text-2xl font-bold">{filteredJobs.filter(j => j.status === status).length}</p>
               </div>
               <CardContent className="p-2 space-y-2 max-h-96 overflow-y-auto">
@@ -140,7 +277,7 @@ export default function JobsPage() {
                     <div className="p-3 rounded-md bg-slate-50 hover:bg-slate-100 cursor-pointer">
                       <p className="text-xs font-medium text-primary">{job.id}</p>
                       <p className="text-sm text-text truncate">{job.address}</p>
-                      <p className="text-xs text-text-muted">{job.owner}</p>
+                      <p className="text-xs text-text-muted">{job.ownerName}</p>
                     </div>
                   </Link>
                 ))}

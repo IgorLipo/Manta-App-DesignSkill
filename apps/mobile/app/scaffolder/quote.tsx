@@ -1,43 +1,136 @@
-import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, Alert } from 'react-native';
-import { useState } from 'react';
-import { useRouter } from 'expo-router';
+import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, Alert, ActivityIndicator } from 'react-native';
+import { useState, useEffect } from 'react';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { jobsApi, getErrorMessage } from '../../src/lib/api';
+import { JobStatus } from '../../src/stores/jobStore';
+
+interface JobInfo {
+  id: string;
+  address: string;
+  propertyType?: string;
+  status: JobStatus;
+}
 
 export default function QuoteScreen() {
   const router = useRouter();
+  const { jobId } = useLocalSearchParams<{ jobId: string }>();
+
+  const [job, setJob] = useState<JobInfo | null>(null);
+  const [loadingJob, setLoadingJob] = useState(true);
   const [amount, setAmount] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [notes, setNotes] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = () => {
+  useEffect(() => {
+    const fetchJob = async () => {
+      if (!jobId) {
+        // For demo purposes, use mock data if no jobId provided
+        setJob({
+          id: '1',
+          address: '14 Oak Avenue, Bristol BS1',
+          propertyType: 'Detached House',
+          status: 'QUOTE_PENDING',
+        });
+        setLoadingJob(false);
+        return;
+      }
+
+      try {
+        const { data } = await jobsApi.get(jobId);
+        setJob(data);
+      } catch (err: any) {
+        const message = getErrorMessage(err);
+        setError(message);
+        if (err.response?.status === 401) {
+          router.replace('/auth/login');
+        }
+      } finally {
+        setLoadingJob(false);
+      }
+    };
+
+    fetchJob();
+  }, [jobId]);
+
+  const handleSubmit = async () => {
     if (!amount || !startDate || !endDate) {
       Alert.alert('Missing Fields', 'Please fill in all required fields');
       return;
     }
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+
+    const amountNum = parseFloat(amount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid quote amount');
+      return;
+    }
+
+    // Validate date format (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+      Alert.alert('Invalid Date', 'Please enter dates in YYYY-MM-DD format');
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const targetJobId = jobId || 'demo-job-id';
+
+      await jobsApi.submitQuote(targetJobId, {
+        amount: amountNum,
+        startDate,
+        endDate,
+        notes,
+      });
+
       Alert.alert('Quote Submitted', 'Your quote has been submitted for review.', [
         { text: 'OK', onPress: () => router.back() }
       ]);
-    }, 1000);
+    } catch (err: any) {
+      const message = getErrorMessage(err);
+      setError(message);
+      Alert.alert('Submission Failed', message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleSaveDraft = () => {
     Alert.alert('Draft Saved', 'Your quote has been saved as a draft.');
+    // In a real app, this would save to local storage or API
   };
+
+  if (loadingJob) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#059669" />
+          <Text style={styles.loadingText}>Loading job details...</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container}>
       <View style={styles.content}>
+        {error && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>{error}</Text>
+          </View>
+        )}
+
         <View style={styles.jobSummary}>
-          <Text style={styles.jobTitle}>14 Oak Avenue, Bristol BS1</Text>
-          <Text style={styles.jobType}>Detached House</Text>
+          <Text style={styles.jobTitle}>{job?.address || 'Loading...'}</Text>
+          <Text style={styles.jobType}>{job?.propertyType || ''}</Text>
         </View>
 
         <View style={styles.form}>
-          <Text style={styles.label}>Quote Amount (£) *</Text>
+          <Text style={styles.label}>Quote Amount (GBP) *</Text>
           <TextInput
             style={styles.input}
             value={amount}
@@ -52,8 +145,9 @@ export default function QuoteScreen() {
             style={styles.input}
             value={startDate}
             onChangeText={setStartDate}
-            placeholder="e.g. 2026-04-01"
+            placeholder="YYYY-MM-DD (e.g. 2026-04-01)"
             placeholderTextColor="#94a3b8"
+            autoCapitalize="none"
           />
 
           <Text style={styles.label}>Proposed End Date *</Text>
@@ -61,8 +155,9 @@ export default function QuoteScreen() {
             style={styles.input}
             value={endDate}
             onChangeText={setEndDate}
-            placeholder="e.g. 2026-04-05"
+            placeholder="YYYY-MM-DD (e.g. 2026-04-05)"
             placeholderTextColor="#94a3b8"
+            autoCapitalize="none"
           />
 
           <Text style={styles.label}>Notes (assumptions, exclusions)</Text>
@@ -77,11 +172,19 @@ export default function QuoteScreen() {
             placeholderTextColor="#94a3b8"
           />
 
-          <Pressable style={[styles.submitButton, loading && styles.buttonDisabled]} onPress={handleSubmit} disabled={loading}>
-            <Text style={styles.submitButtonText}>Submit Quote</Text>
+          <Pressable
+            style={[styles.submitButton, submitting && styles.buttonDisabled]}
+            onPress={handleSubmit}
+            disabled={submitting}
+          >
+            {submitting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.submitButtonText}>Submit Quote</Text>
+            )}
           </Pressable>
 
-          <Pressable style={styles.draftButton} onPress={handleSaveDraft}>
+          <Pressable style={styles.draftButton} onPress={handleSaveDraft} disabled={submitting}>
             <Text style={styles.draftButtonText}>Save as Draft</Text>
           </Pressable>
         </View>
@@ -93,6 +196,10 @@ export default function QuoteScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   content: { padding: 16 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: 12, fontSize: 14, color: '#64748b' },
+  errorBanner: { backgroundColor: '#fee2e2', padding: 12, borderRadius: 8, marginBottom: 16 },
+  errorBannerText: { color: '#dc2626', fontSize: 14 },
   jobSummary: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0', padding: 16, marginBottom: 20 },
   jobTitle: { fontSize: 16, fontWeight: '600', color: '#1e293b' },
   jobType: { fontSize: 14, color: '#64748b', marginTop: 4 },

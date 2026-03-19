@@ -29,7 +29,7 @@ export class SchedulingService {
 
     // Notify owner
     const owner = await this.prisma.owner.findFirst({
-      where: { properties: { some: { id: job.propertyId } } },
+      where: { properties: { some: { id: job.propertyId ?? '' } } },
     });
     if (owner) {
       await this.notifications.send(owner.userId, 'SCHEDULE_PROPOSED', {
@@ -100,9 +100,9 @@ export class SchedulingService {
       'BEGIN:VEVENT',
       `DTSTART:${format(schedule.proposedDate, "yyyyMMdd'T'HHmmss")}`,
       `DTEND:${format(addDays(schedule.proposedDate, 1), "yyyyMMdd'T'HHmmss")}`,
-      `SUMMARY:Scaffold Work - ${schedule.job.property.addressLine1}`,
-      `DESCRIPTION:Address: ${schedule.job.property.addressLine1}, ${schedule.job.property.city}`,
-      `LOCATION:${schedule.job.property.addressLine1}, ${schedule.job.property.city}, ${schedule.job.property.postcode}`,
+      `SUMMARY:Scaffold Work - ${schedule.job.property!.addressLine1}`,
+      `DESCRIPTION:Address: ${schedule.job.property!.addressLine1}, ${schedule.job.property!.city}`,
+      `LOCATION:${schedule.job.property!.addressLine1}, ${schedule.job.property!.city}, ${schedule.job.property!.postcode}`,
       'END:VEVENT',
       'END:VCALENDAR',
     ].join('\r\n');

@@ -17,11 +17,11 @@ export class FilesController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
   uploadPhoto(
     @Param('jobId') jobId: string,
-    @UploadedFile() file: Express.Multer.File,
+    @Req() req: Request & { user: { userId: string } },
+    @UploadedFile() file: any,
     @Body('category') category: PhotoCategory,
     @Body('latitude') latitude?: string,
     @Body('longitude') longitude?: string,
-    @Req() req: Request & { user: { userId: string } },
   ) {
     return this.files.uploadJobPhoto(
       jobId,

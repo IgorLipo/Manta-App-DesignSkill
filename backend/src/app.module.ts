@@ -15,6 +15,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { FilesModule } from './files/files.module';
 import { RegionsModule } from './regions/regions.module';
 import { ScaffoldersModule } from './scaffolders/scaffolders.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { ScaffoldersModule } from './scaffolders/scaffolders.module';
     FilesModule,
     RegionsModule,
     ScaffoldersModule,
+    HealthModule,
   ],
 })
 export class AppModule {}

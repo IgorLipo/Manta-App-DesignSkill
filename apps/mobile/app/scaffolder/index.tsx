@@ -1,69 +1,195 @@
-import { View, Text, StyleSheet, SafeAreaView, FlatList, Pressable, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, FlatList, Pressable, RefreshControl, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { jobsApi, getErrorMessage } from '../../src/lib/api';
+import { useAuthStore } from '../../src/stores/authStore';
+import { JobStatus } from '../../src/stores/jobStore';
 
-const MOCK_JOBS = [
-  { id: '1', address: '14 Oak Avenue, Bristol BS1', status: 'QUOTE_PENDING', priority: 'high', updated: new Date().toISOString() },
-  { id: '2', address: '22 Birch Lane, Exeter EX2', status: 'QUOTE_APPROVED', priority: 'medium', updated: new Date(Date.now() - 86400000 * 2).toISOString() },
-  { id: '3', address: '8 Cedar Drive, Cardiff CF5', status: 'SCHEDULED', priority: 'normal', updated: new Date(Date.now() - 86400000 * 7).toISOString() },
-];
-
-const STATUS_LABELS: Record<string, string> = {
+const STATUS_LABELS: Record<JobStatus, string> = {
+  DRAFT: 'Draft',
+  AWAITING_OWNER_SUBMISSION: 'Awaiting Photos',
+  SUBMITTED: 'Submitted',
+  NEEDS_MORE_INFO: 'More Info Needed',
+  VALIDATED: 'Validated',
+  ASSIGNED_TO_SCAFFOLDER: 'Assigned to You',
   QUOTE_PENDING: 'Quote Needed',
+  QUOTE_SUBMITTED: 'Quote Submitted',
+  QUOTE_REVISION_REQUESTED: 'Revision Requested',
   QUOTE_APPROVED: 'Quote Approved',
+  QUOTE_REJECTED: 'Quote Rejected',
+  SCHEDULING_IN_PROGRESS: 'Scheduling',
   SCHEDULED: 'Work Scheduled',
+  SCAFFOLD_WORK_IN_PROGRESS: 'Work in Progress',
+  SCAFFOLD_COMPLETE: 'Complete',
+  INSTALLER_ASSIGNED: 'Installer Assigned',
+  SITE_REPORT_PENDING: 'Report Pending',
+  SITE_REPORT_IN_PROGRESS: 'Report In Progress',
+  SITE_REPORT_SUBMITTED: 'Report Submitted',
+  COMPLETED: 'Completed',
+  CANCELLED: 'Cancelled',
+  ON_HOLD: 'On Hold',
 };
 
 const STATUS_COLORS: Record<string, string> = {
   QUOTE_PENDING: '#4f46e5',
   QUOTE_APPROVED: '#059669',
   SCHEDULED: '#0284c7',
+  ASSIGNED_TO_SCAFFOLDER: '#9333ea',
+  QUOTE_SUBMITTED: '#2563eb',
+  QUOTE_REVISION_REQUESTED: '#f97316',
+  SCHEDULING_IN_PROGRESS: '#0891b2',
+  SCAFFOLD_WORK_IN_PROGRESS: '#ca8a04',
+  SCAFFOLD_COMPLETE: '#059669',
+  VALIDATED: '#0d9488',
+  NEEDS_MORE_INFO: '#f97316',
+  SUBMITTED: '#2563eb',
+  AWAITING_OWNER_SUBMISSION: '#f59e0b',
+  COMPLETED: '#059669',
+  CANCELLED: '#64748b',
+  ON_HOLD: '#9333ea',
+  DRAFT: '#64748b',
+  INSTALLER_ASSIGNED: '#7c3aed',
+  SITE_REPORT_PENDING: '#db2777',
+  SITE_REPORT_IN_PROGRESS: '#e11d48',
+  SITE_REPORT_SUBMITTED: '#059669',
 };
 
 const PRIORITY_COLORS = { high: '#dc2626', medium: '#f59e0b', normal: '#64748b' };
 
+interface JobListItem {
+  id: string;
+  address: string;
+  postcode?: string;
+  status: JobStatus;
+  priority: 'high' | 'medium' | 'normal';
+  updatedAt: string;
+}
+
 export default function ScaffolderJobsScreen() {
   const router = useRouter();
+  const { user } = useAuthStore();
+  const [jobs, setJobs] = useState<JobListItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const onRefresh = () => {
+  const fetchJobs = useCallback(async () => {
+    try {
+      setError(null);
+      // Fetch jobs - the API will filter by the current user's ID (scaffolder)
+      const { data } = await jobsApi.list({ limit: 50 });
+      const jobList = Array.isArray(data) ? data : (data.data || []);
+      setJobs(jobList);
+    } catch (err: any) {
+      const message = getErrorMessage(err);
+      setError(message);
+      if (err.response?.status === 401) {
+        router.replace('/auth/login');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const onRefresh = async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+    await fetchJobs();
+    setRefreshing(false);
   };
+
+  useEffect(() => {
+    fetchJobs();
+  }, [fetchJobs]);
+
+  const renderJobCard = ({ item }: { item: JobListItem }) => (
+    <Pressable
+      style={styles.jobCard}
+      onPress={() => router.push({ pathname: '/scaffolder/job-detail', params: { jobId: item.id } })}
+    >
+      <View style={styles.jobTop}>
+        <View style={[styles.priorityDot, { backgroundColor: PRIORITY_COLORS[item.priority] }]} />
+        <Text style={styles.jobAddress}>{item.address}</Text>
+      </View>
+      <View style={[styles.statusBadge, { backgroundColor: (STATUS_COLORS[item.status] || '#64748b') + '20' }]}>
+        <Text style={[styles.statusText, { color: STATUS_COLORS[item.status] || '#64748b' }]}>
+          {STATUS_LABELS[item.status] || item.status}
+        </Text>
+      </View>
+      <View style={styles.jobFooter}>
+        <Text style={styles.updated}>Updated {new Date(item.updatedAt).toLocaleDateString()}</Text>
+        <Pressable style={styles.actionButton}>
+          <Text style={styles.actionButtonText}>View Details</Text>
+        </Pressable>
+      </View>
+    </Pressable>
+  );
+
+  const renderSkeleton = () => (
+    <>
+      {[1, 2, 3].map((i) => (
+        <View key={i} style={[styles.jobCard, { opacity: 0.6 }]}>
+          <View style={styles.jobTop}>
+            <View style={{ width: 8, height: 8, backgroundColor: '#e2e8f0', borderRadius: 4 }} />
+            <View style={{ height: 16, backgroundColor: '#e2e8f0', borderRadius: 4, width: '60%' }} />
+          </View>
+          <View style={{ height: 24, width: 120, backgroundColor: '#e2e8f0', borderRadius: 12, marginTop: 10 }} />
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>
+            <View style={{ height: 12, width: 80, backgroundColor: '#e2e8f0', borderRadius: 4 }} />
+            <View style={{ height: 28, width: 100, backgroundColor: '#e2e8f0', borderRadius: 8 }} />
+          </View>
+        </View>
+      ))}
+    </>
+  );
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.greeting}>Good morning,</Text>
+            <Text style={styles.name}>{user?.name || 'Scaffolder'}</Text>
+          </View>
+          <View style={styles.badge}><Text style={styles.badgeText}>Scaffolder</Text></View>
+        </View>
+        <View style={{ padding: 16 }}>
+          <Text style={styles.sectionTitle}>Assigned Jobs</Text>
+          {renderSkeleton()}
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>Good morning,</Text>
-          <Text style={styles.name}>Apex Scaffolding Ltd</Text>
+          <Text style={styles.name}>{user?.name || 'Scaffolder'}</Text>
         </View>
         <View style={styles.badge}><Text style={styles.badgeText}>Scaffolder</Text></View>
       </View>
 
+      {error && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <Pressable onPress={fetchJobs}><Text style={styles.retryText}>Tap to retry</Text></Pressable>
+        </View>
+      )}
+
       <FlatList
-        data={MOCK_JOBS}
+        data={jobs}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: 16 }}
-        ListHeaderComponent={<Text style={styles.sectionTitle}>Assigned Jobs ({MOCK_JOBS.length})</Text>}
+        ListHeaderComponent={<Text style={styles.sectionTitle}>Assigned Jobs ({jobs.length})</Text>}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No jobs assigned</Text>
+            <Text style={styles.emptySubtext}>Jobs assigned to you will appear here</Text>
+          </View>
+        }
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#059669" />}
-        renderItem={({ item }) => (
-          <Pressable style={styles.jobCard} onPress={() => router.push('/scaffolder/job-detail')}>
-            <View style={styles.jobTop}>
-              <View style={[styles.priorityDot, { backgroundColor: PRIORITY_COLORS[item.priority as keyof typeof PRIORITY_COLORS] }]} />
-              <Text style={styles.jobAddress}>{item.address}</Text>
-            </View>
-            <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[item.status] + '20' }]}>
-              <Text style={[styles.statusText, { color: STATUS_COLORS[item.status] }]}>{STATUS_LABELS[item.status]}</Text>
-            </View>
-            <View style={styles.jobFooter}>
-              <Text style={styles.updated}>Updated {new Date(item.updated).toLocaleDateString()}</Text>
-              <Pressable style={styles.actionButton}>
-                <Text style={styles.actionButtonText}>View Details</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        )}
+        renderItem={renderJobCard}
       />
     </SafeAreaView>
   );
@@ -87,4 +213,10 @@ const styles = StyleSheet.create({
   updated: { fontSize: 12, color: '#94a3b8' },
   actionButton: { backgroundColor: '#059669', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
   actionButtonText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  errorContainer: { backgroundColor: '#fee2e2', padding: 12, marginHorizontal: 16, marginTop: 8, borderRadius: 8 },
+  errorText: { color: '#dc2626', fontSize: 14 },
+  retryText: { color: '#dc2626', fontSize: 12, marginTop: 4, fontWeight: '600', textDecorationLine: 'underline' },
+  emptyContainer: { alignItems: 'center', paddingVertical: 40 },
+  emptyText: { fontSize: 16, color: '#64748b', fontWeight: '600' },
+  emptySubtext: { fontSize: 14, color: '#94a3b8', marginTop: 4 },
 });

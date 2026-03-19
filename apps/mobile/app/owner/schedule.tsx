@@ -1,36 +1,132 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert } from 'react-native';
-import { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, ActivityIndicator } from 'react-native';
+import { useState, useEffect } from 'react';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { format, isToday, isSameDay } from 'date-fns';
+import { jobsApi, getErrorMessage } from '../../src/lib/api';
 
-const PROPOSED_DATE = new Date('2026-03-25');
-const CONFIRMED_BY = ['John Smith (You)', 'Apex Scaffolding Ltd'];
+interface ScheduleData {
+  date: string;
+  confirmedBy: string[];
+}
 
 export default function ScheduleScreen() {
+  const router = useRouter();
+  const { jobId } = useLocalSearchParams<{ jobId?: string }>();
+
+  const [loading, setLoading] = useState(true);
+  const [schedule, setSchedule] = useState<ScheduleData | null>(null);
   const [response, setResponse] = useState<'confirm' | 'reschedule' | 'unavailable' | null>(null);
   const [reason, setReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleConfirm = () => {
-    Alert.alert('Date Confirmed', 'You have confirmed the scaffolding date.', [{ text: 'OK' }]);
-    setResponse('confirm');
+  useEffect(() => {
+    const fetchSchedule = async () => {
+      if (!jobId) {
+        // Demo/mock data
+        setSchedule({
+          date: '2026-03-25',
+          confirmedBy: ['John Smith (You)', 'Apex Scaffolding Ltd'],
+        });
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const { data } = await jobsApi.getSchedule(jobId);
+        setSchedule(data.schedule || null);
+      } catch (err: any) {
+        const message = getErrorMessage(err);
+        setError(message);
+        if (err.response?.status === 401) {
+          router.replace('/auth/login');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSchedule();
+  }, [jobId]);
+
+  const handleConfirm = async () => {
+    if (!jobId) {
+      Alert.alert('Date Confirmed', 'You have confirmed the scaffolding date.', [{ text: 'OK' }]);
+      setResponse('confirm');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await jobsApi.confirmSchedule(jobId);
+      Alert.alert('Date Confirmed', 'You have confirmed the scaffolding date.', [{ text: 'OK' }]);
+      setResponse('confirm');
+    } catch (err: any) {
+      Alert.alert('Error', getErrorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleReschedule = () => {
+  const handleReschedule = async () => {
     if (!reason) {
       Alert.alert('Reason Required', 'Please provide a reason for requesting a change.');
       return;
     }
-    Alert.alert('Change Requested', 'Your request has been submitted.', [{ text: 'OK' }]);
-    setResponse('reschedule');
+
+    if (!jobId) {
+      Alert.alert('Change Requested', 'Your request has been submitted.', [{ text: 'OK' }]);
+      setResponse('reschedule');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await jobsApi.requestScheduleChange(jobId, reason);
+      Alert.alert('Change Requested', 'Your request has been submitted.', [{ text: 'OK' }]);
+      setResponse('reschedule');
+    } catch (err: any) {
+      Alert.alert('Error', getErrorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleUnavailable = () => {
+  const handleUnavailable = async () => {
     if (!reason) {
       Alert.alert('Reason Required', 'Please explain why this date does not work.');
       return;
     }
-    Alert.alert('Marked Unavailable', 'We will contact you to find an alternative date.', [{ text: 'OK' }]);
-    setResponse('unavailable');
+
+    if (!jobId) {
+      Alert.alert('Marked Unavailable', 'We will contact you to find an alternative date.', [{ text: 'OK' }]);
+      setResponse('unavailable');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await jobsApi.markUnavailable(jobId, reason);
+      Alert.alert('Marked Unavailable', 'We will contact you to find an alternative date.', [{ text: 'OK' }]);
+      setResponse('unavailable');
+    } catch (err: any) {
+      Alert.alert('Error', getErrorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#059669" />
+        </View>
+      </View>
+    );
+  }
+
+  const proposedDate = schedule?.date ? new Date(schedule.date) : new Date('2026-03-25');
 
   // Generate calendar days
   const days = Array.from({ length: 35 }, (_, i) => {
@@ -44,17 +140,17 @@ export default function ScheduleScreen() {
       <View style={styles.content}>
         <View style={styles.dateCard}>
           <Text style={styles.dateLabel}>Proposed Date</Text>
-          <Text style={styles.dateValue}>{format(PROPOSED_DATE, 'EEEE, MMMM d, yyyy')}</Text>
+          <Text style={styles.dateValue}>{format(proposedDate, 'EEEE, MMMM d, yyyy')}</Text>
         </View>
 
         <View style={styles.calendar}>
-          <Text style={styles.calendarTitle}>{format(PROPOSED_DATE, 'MMMM yyyy')}</Text>
+          <Text style={styles.calendarTitle}>{format(proposedDate, 'MMMM yyyy')}</Text>
           <View style={styles.calendarGrid}>
             {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
               <Text key={i} style={styles.dayLabel}>{d}</Text>
             ))}
             {days.map((day, i) => {
-              const isSelected = isSameDay(day, PROPOSED_DATE);
+              const isSelected = isSameDay(day, proposedDate);
               const today = isToday(day);
               return (
                 <View key={i} style={[styles.dayCell, isSelected && styles.dayCellSelected, today && styles.dayCellToday]}>
@@ -65,32 +161,58 @@ export default function ScheduleScreen() {
           </View>
         </View>
 
-        <View style={styles.confirmedBy}>
-          <Text style={styles.confirmedTitle}>Confirmed Attendees</Text>
-          {CONFIRMED_BY.map((name, i) => (
-            <View key={i} style={styles.confirmedItem}>
-              <Text style={styles.confirmedCheck}>✓</Text>
-              <Text style={styles.confirmedName}>{name}</Text>
-            </View>
-          ))}
-        </View>
+        {schedule?.confirmedBy && schedule.confirmedBy.length > 0 && (
+          <View style={styles.confirmedBy}>
+            <Text style={styles.confirmedTitle}>Confirmed Attendees</Text>
+            {schedule.confirmedBy.map((name, i) => (
+              <View key={i} style={styles.confirmedItem}>
+                <Text style={styles.confirmedCheck}>✓</Text>
+                <Text style={styles.confirmedName}>{name}</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         <View style={styles.actions}>
           <Text style={styles.actionTitle}>How would you like to respond?</Text>
-          <Pressable style={[styles.actionButton, styles.confirmButton]} onPress={handleConfirm}>
-            <Text style={styles.confirmButtonText}>✓ Confirm Date</Text>
+          <Pressable
+            style={[styles.actionButton, styles.confirmButton, submitting && styles.buttonDisabled]}
+            onPress={handleConfirm}
+            disabled={submitting}
+          >
+            {submitting ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={styles.confirmButtonText}>Confirm Date</Text>
+            )}
           </Pressable>
-          <Pressable style={[styles.actionButton, styles.rescheduleButton]} onPress={handleReschedule}>
-            <Text style={styles.rescheduleButtonText}>📅 Request Change</Text>
+          <Pressable
+            style={[styles.actionButton, styles.rescheduleButton, submitting && styles.buttonDisabled]}
+            onPress={handleReschedule}
+            disabled={submitting}
+          >
+            <Text style={styles.rescheduleButtonText}>Request Change</Text>
           </Pressable>
-          <Pressable style={[styles.actionButton, styles.unavailableButton]} onPress={handleUnavailable}>
-            <Text style={styles.unavailableButtonText}>✕ Mark Unavailable</Text>
+          <Pressable
+            style={[styles.actionButton, styles.unavailableButton, submitting && styles.buttonDisabled]}
+            onPress={handleUnavailable}
+            disabled={submitting}
+          >
+            <Text style={styles.unavailableButtonText}>Mark Unavailable</Text>
           </Pressable>
 
           {(response === 'reschedule' || response === 'unavailable') && (
             <View style={styles.reasonContainer}>
               <Text style={styles.reasonLabel}>Reason:</Text>
-              <TextInput style={styles.reasonInput} value={reason} onChangeText={setReason} placeholder="Please explain..." multiline numberOfLines={3} placeholderTextColor="#94a3b8" />
+              <TextInput
+                style={styles.reasonInput}
+                value={reason}
+                onChangeText={setReason}
+                placeholder="Please explain..."
+                multiline
+                numberOfLines={3}
+                placeholderTextColor="#94a3b8"
+              />
             </View>
           )}
         </View>
@@ -128,6 +250,7 @@ const styles = StyleSheet.create({
   rescheduleButtonText: { color: '#f97316', fontSize: 16, fontWeight: '600' },
   unavailableButton: { backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#dc2626' },
   unavailableButtonText: { color: '#dc2626', fontSize: 16, fontWeight: '600' },
+  buttonDisabled: { opacity: 0.6 },
   reasonContainer: { marginTop: 16 },
   reasonLabel: { fontSize: 14, fontWeight: '500', color: '#374151', marginBottom: 8 },
   reasonInput: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, padding: 12, fontSize: 14, minHeight: 80, textAlignVertical: 'top' },

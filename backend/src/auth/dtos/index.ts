@@ -3,11 +3,11 @@ import { Role } from '@prisma/client';
 
 export class RegisterDto {
   @IsEmail()
-  email: string;
+  email!: string;
 
   @IsString()
   @MinLength(8)
-  password: string;
+  password!: string;
 
   @IsEnum(Role)
   @IsOptional()
@@ -36,34 +36,34 @@ export class RegisterDto {
 
 export class LoginDto {
   @IsEmail()
-  email: string;
+  email!: string;
 
   @IsString()
-  password: string;
+  password!: string;
 }
 
 export class RefreshTokenDto {
   @IsString()
-  refreshToken: string;
+  refreshToken!: string;
 }
 
 export class ForgotPasswordDto {
   @IsEmail()
-  email: string;
+  email!: string;
 }
 
 export class ResetPasswordDto {
   @IsString()
-  token: string;
+  token!: string;
 
   @IsString()
   @MinLength(8)
-  newPassword: string;
+  newPassword!: string;
 }
 
 export class VerifyEmailDto {
   @IsString()
-  token: string;
+  token!: string;
 }
 
 export class UpdateProfileDto {
@@ -85,19 +85,19 @@ export class UpdateProfileDto {
 
 export class ChangePasswordDto {
   @IsString()
-  currentPassword: string;
+  currentPassword!: string;
 
   @IsString()
   @MinLength(8)
-  newPassword: string;
+  newPassword!: string;
 }
 
 export class MagicLinkDto {
   @IsEmail()
-  email: string;
+  email!: string;
 }
 
 export class MagicLinkVerifyDto {
   @IsString()
-  token: string;
+  token!: string;
 }

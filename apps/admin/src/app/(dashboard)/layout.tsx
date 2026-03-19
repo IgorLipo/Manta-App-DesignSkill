@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/components/ui/cn';
@@ -11,18 +11,15 @@ import {
   LayoutDashboard, Briefcase, Users, UserCog, Building2, Bell, FileText,
   BarChart3, Settings, ChevronLeft, ChevronRight, Menu, X, LogOut
 } from 'lucide-react';
+import { notificationsApi } from '@/lib/api';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/jobs', label: 'Jobs', icon: Briefcase },
   { href: '/scaffolders', label: 'Scaffolders', icon: Users },
-  { href: '/engineers', label: 'Engineers', icon: UserCog },
-  { href: '/owners', label: 'Owners', icon: Building2 },
   { href: '/regions', label: 'Regions', icon: MapPin },
   { href: '/notifications', label: 'Notifications', icon: Bell },
-  { href: '/notification-templates', label: 'Templates', icon: FileText },
-  { href: '/audit-log', label: 'Audit Log', icon: FileText },
-  { href: '/analytics', label: 'Analytics', icon: BarChart3 },
+  { href: '/audit', label: 'Audit Log', icon: FileText },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -34,6 +31,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      try {
+        const response = await notificationsApi.unreadCount();
+        setUnreadCount(response.data as number);
+      } catch (error) {
+        console.error('Failed to fetch unread count:', error);
+      }
+    };
+
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
@@ -112,10 +125,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Input placeholder="Search jobs, scaffolders..." className="w-full" />
           </div>
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-accent rounded-full" />
-            </Button>
+            <Link href="/notifications">
+              <Button variant="ghost" size="icon" className="relative">
+                <Bell className="w-5 h-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center bg-accent text-white text-[10px] font-medium rounded-full px-1">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </Button>
+            </Link>
             <Avatar fallback="AD" className="lg:hidden" />
           </div>
         </header>

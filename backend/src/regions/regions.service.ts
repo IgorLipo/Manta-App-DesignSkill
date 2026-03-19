@@ -9,10 +9,9 @@ export class RegionsService {
   // ==================== Create region (admin) ====================
 
   async create(data: { name: string; code: string; description?: string }) {
-    // Check for duplicate name or code
     const existing = await this.prisma.region.findFirst({
       where: {
-        OR: [{ name: data.name }, { code: data.code }],
+        OR: [{ name: data.name }, { code: data.code.toUpperCase() }],
       },
     });
 
@@ -25,6 +24,7 @@ export class RegionsService {
         name: data.name,
         code: data.code.toUpperCase(),
         description: data.description,
+        postcode: '000000', // placeholder - postcode not used in scaffold ops flow
       },
     });
   }
@@ -48,13 +48,12 @@ export class RegionsService {
       this.prisma.region.findMany({
         where,
         include: {
-          scaffolders: {
+          scaffolderRegions: {
             include: {
               scaffolder: {
-                select: { id: true, companyName: true, firstName: true, lastName: true },
+                select: { id: true, companyName: true, firstName: true, lastName: true, isActive: true },
               },
             },
-            where: { scaffolder: { isActive: true } },
           },
         },
         skip,
@@ -67,8 +66,7 @@ export class RegionsService {
     return {
       data: data.map((region) => ({
         ...region,
-        scaffolderCount: region.scaffolders.length,
-        scaffolders: undefined,
+        scaffolderCount: region.scaffolderRegions.filter(sr => sr.scaffolder.isActive).length,
       })),
       total,
       page,
@@ -82,7 +80,7 @@ export class RegionsService {
     const region = await this.prisma.region.findUnique({
       where: { id },
       include: {
-        scaffolders: {
+        scaffolderRegions: {
           include: {
             scaffolder: {
               include: { user: { select: { email: true } } },
@@ -107,7 +105,6 @@ export class RegionsService {
       throw new NotFoundException('Region not found');
     }
 
-    // Check for duplicate name or code if changing
     if (data.name || data.code) {
       const existing = await this.prisma.region.findFirst({
         where: {
@@ -140,15 +137,14 @@ export class RegionsService {
   async delete(id: string) {
     const region = await this.prisma.region.findUnique({
       where: { id },
-      include: { scaffolders: true },
+      include: { scaffolderRegions: true },
     });
 
     if (!region) {
       throw new NotFoundException('Region not found');
     }
 
-    // Check if region has active scaffolders
-    if (region.scaffolders.length > 0) {
+    if (region.scaffolderRegions.length > 0) {
       throw new ConflictException('Cannot delete region with assigned scaffolders');
     }
 
@@ -170,8 +166,8 @@ export class RegionsService {
       throw new NotFoundException('Region not found');
     }
 
-    const where = {
-      regions: { some: { regionId } },
+    const where: Prisma.ScaffolderWhereInput = {
+      scaffolderRegions: { some: { regionId } },
       ...(isActive !== undefined && { isActive }),
     };
 
@@ -180,7 +176,7 @@ export class RegionsService {
         where,
         include: {
           user: { select: { email: true } },
-          regions: { include: { region: true } },
+          scaffolderRegions: { include: { region: true } },
         },
         skip,
         take: limit,

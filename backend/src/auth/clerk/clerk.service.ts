@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { Clerk } from '@clerk/clerk-sdk-node';
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const Clerk = require('@clerk/clerk-sdk-node');
 
 @Injectable()
 export class ClerkService {
-  private clerk: Clerk;
+  private clerk: any;
 
   constructor() {
     this.clerk = new Clerk({

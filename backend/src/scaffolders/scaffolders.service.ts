@@ -1,8 +1,7 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { Role } from '@prisma/client';
-import * as bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
@@ -23,7 +22,6 @@ export class ScaffoldersService {
     companyName?: string;
     regionIds?: string[];
   }) {
-    // Check if email already exists
     const existing = await this.prisma.user.findUnique({
       where: { email: data.email.toLowerCase() },
     });
@@ -32,16 +30,14 @@ export class ScaffoldersService {
       throw new ConflictException('Email already registered');
     }
 
-    const passwordHash = await bcrypt.hash(data.password, 12);
-
     // Create user and scaffolder profile in transaction
     return this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: {
           email: data.email.toLowerCase(),
-          passwordHash,
+          clerkId: `scaffolder-${data.email.toLowerCase()}`,
           role: Role.SCAFFOLDER,
-          emailVerified: true, // Admin creates verified users
+          emailVerified: new Date(),
           isActive: true,
         },
       });
@@ -54,14 +50,14 @@ export class ScaffoldersService {
           phone: data.phone,
           companyName: data.companyName,
           isActive: true,
-          ...(data.regionIds && {
-            regions: {
+          ...(data.regionIds && data.regionIds.length > 0 && {
+            scaffolderRegions: {
               create: data.regionIds.map((regionId) => ({ regionId })),
             },
           }),
         },
         include: {
-          regions: { include: { region: true } },
+          scaffolderRegions: { include: { region: true } },
           user: { select: { email: true } },
         },
       });
@@ -85,7 +81,7 @@ export class ScaffoldersService {
     const where: Prisma.ScaffolderWhereInput = {};
 
     if (regionId) {
-      where.regions = { some: { regionId } };
+      where.scaffolderRegions = { some: { regionId } };
     }
 
     if (isActive !== undefined) {
@@ -105,7 +101,7 @@ export class ScaffoldersService {
         where,
         include: {
           user: { select: { email: true } },
-          regions: { include: { region: true } },
+          scaffolderRegions: { include: { region: true } },
         },
         skip,
         take: limit,
@@ -124,8 +120,8 @@ export class ScaffoldersService {
       where: { id },
       include: {
         user: { select: { email: true, isActive: true, emailVerified: true } },
-        regions: { include: { region: true } },
-        assignments: {
+        scaffolderRegions: { include: { region: true } },
+        jobs: {
           where: { isActive: true },
           include: { job: { include: { property: true } } },
         },
@@ -158,7 +154,6 @@ export class ScaffoldersService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      // Update user active status if needed
       if (data.isActive !== undefined) {
         await tx.user.update({
           where: { id: scaffolder.userId },
@@ -166,14 +161,11 @@ export class ScaffoldersService {
         });
       }
 
-      // Update region associations if provided
       if (data.regionIds !== undefined) {
-        // Remove existing associations
         await tx.scaffolderRegion.deleteMany({
           where: { scaffolderId: id },
         });
 
-        // Add new associations
         if (data.regionIds.length > 0) {
           await tx.scaffolderRegion.createMany({
             data: data.regionIds.map((regionId) => ({
@@ -184,7 +176,6 @@ export class ScaffoldersService {
         }
       }
 
-      // Update scaffolder profile
       return tx.scaffolder.update({
         where: { id },
         data: {
@@ -196,7 +187,7 @@ export class ScaffoldersService {
         },
         include: {
           user: { select: { email: true, isActive: true } },
-          regions: { include: { region: true } },
+          scaffolderRegions: { include: { region: true } },
         },
       });
     });
@@ -290,7 +281,7 @@ export class ScaffoldersService {
       where: { userId },
       include: {
         user: { select: { email: true } },
-        regions: { include: { region: true } },
+        scaffolderRegions: { include: { region: true } },
       },
     });
 

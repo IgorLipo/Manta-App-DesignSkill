@@ -86,15 +86,56 @@ export const schedulingApi = {
 
 // ─── Notifications ─────────────────────────────────────
 export const notificationsApi = {
-  list: (page = 1) => api.get('/notifications', { params: { page } }),
+  list: (params?: { page?: number; limit?: number; type?: string; read?: boolean }) =>
+    api.get('/notifications', { params }),
   unreadCount: () => api.get('/notifications/unread-count'),
   markRead: (id: string) => api.post(`/notifications/${id}/read`),
   markAllRead: () => api.post('/notifications/read-all'),
+  delete: (id: string) => api.delete(`/notifications/${id}`),
+};
+
+// ─── Regions ────────────────────────────────────────
+export const regionsApi = {
+  list: (params?: { isActive?: boolean; page?: number; limit?: number; search?: string }) =>
+    api.get('/regions', { params }),
+  get: (id: string) => api.get(`/regions/${id}`),
+  create: (data: { name: string; code: string; description?: string }) => api.post('/regions', data),
+  update: (id: string, data: { name?: string; code?: string; description?: string; isActive?: boolean }) =>
+    api.patch(`/regions/${id}`, data),
+  delete: (id: string) => api.delete(`/regions/${id}`),
 };
 
 // ─── Scaffolders ─────────────────────────────────────
 export const scaffoldersApi = {
-  list: (filters?: { regionId?: string }) => api.get('/users/scaffolders', { params: filters }),
+  list: (params?: { regionId?: string; isActive?: boolean; page?: number; limit?: number; search?: string }) =>
+    api.get('/scaffolders', { params }),
+  get: (id: string) => api.get(`/scaffolders/${id}`),
+  create: (data: {
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+    phone?: string;
+    companyName?: string;
+    regionIds?: string[];
+  }) => api.post('/scaffolders', data),
+  update: (id: string, data: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    companyName?: string;
+    isActive?: boolean;
+    regionIds?: string[];
+  }) => api.patch(`/scaffolders/${id}`, data),
+  delete: (id: string) => api.delete(`/scaffolders/${id}`),
+  deactivate: (id: string) => api.post(`/scaffolders/${id}/deactivate`),
+  reactivate: (id: string) => api.post(`/scaffolders/${id}/reactivate`),
+};
+
+// ─── Audit ──────────────────────────────────────────
+export const auditApi = {
+  list: (params?: { page?: number; limit?: number; action?: string; entityType?: string; userId?: string }) =>
+    api.get('/audit', { params }),
 };
 
 // ─── Reports ─────────────────────────────────────────
