@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Solar Ops",
+    "slug": "solar-ops",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "solarops",
+    "splash": {
+      "image": "./assets/splash.png",
+      "backgroundColor": "#2563eb"
+    },
+    "ios": {
+      "bundleIdentifier": "com.solarops.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Solar Ops needs camera access to photograph your property for solar installation planning.",
+        "NSPhotoLibraryUsageDescription": "Solar Ops needs photo library access to upload existing photos of your property.",
+        "NSLocationWhenInUseUsageDescription": "Solar Ops uses your location to accurately pin your property address."
+      }
+    },
+    "android": {
+      "package": "com.solarops.app",
+      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE", "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#2563eb"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "solar-ops-project-id"
+      }
+    }
+  }
+}
