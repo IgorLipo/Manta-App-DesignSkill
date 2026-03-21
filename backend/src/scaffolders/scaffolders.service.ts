@@ -75,7 +75,9 @@ export class ScaffoldersService {
     limit?: number;
     search?: string;
   }) {
-    const { page = 1, limit = 20, regionId, isActive, search } = filters || {};
+    const page = Number(filters?.page) || 1;
+    const limit = Number(filters?.limit) || 20;
+    const { regionId, isActive, search } = filters || {};
     const skip = (page - 1) * limit;
 
     const where: Prisma.ScaffolderWhereInput = {};

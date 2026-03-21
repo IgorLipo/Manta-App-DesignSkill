@@ -227,7 +227,9 @@ export class JobsService {
 
   // ─── List jobs (role-aware) ──────────────────────────
   async listJobs(userId: string, role: Role, filters: { status?: JobStatus; page?: number; limit?: number; search?: string }) {
-    const { page = 1, limit = 20, status, search } = filters;
+    const page = Number(filters.page) || 1;
+    const limit = Number(filters.limit) || 20;
+    const { status, search } = filters;
     const skip = (page - 1) * limit;
 
     const where: any = {};

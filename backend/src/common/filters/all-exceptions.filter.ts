@@ -8,6 +8,11 @@ export class SentryFilter implements ExceptionFilter {
     const status = exception instanceof HttpException ? exception.getStatus() : 500;
     const message = exception instanceof HttpException ? exception.message : 'Internal server error';
 
+    // Log actual error for debugging
+    if (status >= 500) {
+      console.error('[SentryFilter] Server error:', exception instanceof Error ? exception.message : exception);
+    }
+
     response.status(status).json({
       statusCode: status,
       message,

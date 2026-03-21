@@ -69,8 +69,9 @@ export default function JobsPage() {
       if (statusFilter !== 'all') params.status = statusFilter;
       if (search) params.search = search;
 
-      const response = await jobsApi.list(params) as { data: Job[] };
-      setJobs(response.data || []);
+      const response = await jobsApi.list(params);
+      const items = response.data?.items || response.data?.data?.items || [];
+      setJobs(items);
     } catch (error) {
       console.error('Failed to fetch jobs:', error);
       toast({ title: 'Error', description: 'Failed to load jobs', variant: 'destructive' });
